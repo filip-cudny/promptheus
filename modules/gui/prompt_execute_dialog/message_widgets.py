@@ -125,7 +125,7 @@ class UserMessageBubble(QWidget):
         layout.addWidget(self.images_container)
 
         self.text_edit = create_text_edit(
-            placeholder="Type your message...\n(Ctrl+Enter: Close & get result to clipboard | Alt+Enter: Send & show | Ctrl+V: Paste image)",
+            placeholder="Type your message...\n(Ctrl+Enter: Close & get result to clipboard | Enter: Send & show | Ctrl+V: Paste image)",
             min_height=BUBBLE_TEXT_EDIT_MIN_HEIGHT,
             is_bubble=True,
         )

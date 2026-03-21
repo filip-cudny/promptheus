@@ -382,7 +382,7 @@ class PromptExecuteDialog(BaseDialog):
 
         # Text edit area
         self.input_edit = create_text_edit(
-            placeholder="Type your message...\n(Ctrl+Enter: Close & get result to clipboard | Alt+Enter: Send & show | Ctrl+V: Paste image)"
+            placeholder="Type your message...\n(Ctrl+Enter: Close & get result to clipboard | Enter: Send & show | Ctrl+V: Paste image)"
         )
         self.input_edit.setToolTip("Type and send message with prompt")
         self.input_edit.textChanged.connect(self._on_input_text_changed)
@@ -485,10 +485,10 @@ class PromptExecuteDialog(BaseDialog):
 
         button_bar.addStretch()
 
-        # Send & Show button (Alt+Enter)
+        # Send & Show button (Enter)
         self.send_show_btn = QPushButton()
         self.send_show_btn.setIcon(create_icon("send-horizontal", "#444444", 16))
-        self.send_show_btn.setToolTip("Send & Show Result (Alt+Enter)")
+        self.send_show_btn.setToolTip("Send & Show Result (Enter)")
         self.send_show_btn.clicked.connect(self._on_send_show)
         self.send_show_btn.setEnabled(False)  # Disabled until message has content
         button_bar.addWidget(self.send_show_btn)
@@ -1248,11 +1248,11 @@ class PromptExecuteDialog(BaseDialog):
             if is_regenerate:
                 icon_color = "#f0f0f0" if can_act else "#444444"
                 self.send_show_btn.setIcon(create_icon("refresh-cw", icon_color, 16))
-                self.send_show_btn.setToolTip("Regenerate (Alt+Enter)")
+                self.send_show_btn.setToolTip("Regenerate (Enter)")
             else:
                 icon_color = "#f0f0f0" if can_act else "#444444"
                 self.send_show_btn.setIcon(create_icon("send-horizontal", icon_color, 16))
-                self.send_show_btn.setToolTip("Send & Show Result (Alt+Enter)")
+                self.send_show_btn.setToolTip("Send & Show Result (Enter)")
 
         # Only update send_copy_btn icon if not in stop mode
         if stop_active != "ctrl":

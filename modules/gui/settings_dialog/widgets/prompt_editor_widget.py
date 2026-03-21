@@ -354,6 +354,9 @@ class PromptEditorWidget(QWidget):
     def is_new_prompt(self) -> bool:
         return self._is_new
 
+    def mark_saved(self):
+        self._is_new = False
+
     def _get_combined_content_length(self) -> int:
         system_len = len(self._system_edit.toPlainText().strip())
         user_len = len(self._user_edit.toPlainText().strip())

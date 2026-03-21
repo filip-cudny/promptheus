@@ -299,9 +299,9 @@ class PromptsPanel(SettingsPanelBase):
         prompt_id, data = result
         if self._prompt_editor.is_new_prompt():
             self._config_service.add_prompt(data, persist=False)
+            self._prompt_editor.mark_saved()
         else:
             self._config_service.update_prompt(prompt_id, data, persist=False)
-        self._load_prompts()
 
     def _on_add_prompt(self):
         self._prompt_list.clear_selection()
@@ -337,6 +337,7 @@ class PromptsPanel(SettingsPanelBase):
             prompt_id, data = result
             if self._prompt_editor.is_new_prompt():
                 self._config_service.add_prompt(data, persist=False)
+                self._prompt_editor.mark_saved()
             else:
                 self._config_service.update_prompt(prompt_id, data, persist=False)
             self._load_prompts()
