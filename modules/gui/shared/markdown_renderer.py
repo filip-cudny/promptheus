@@ -22,19 +22,32 @@ from modules.gui.shared.theme import (
     COLOR_TEXT_SECONDARY,
 )
 
-_DARK_FORMATTER = HtmlFormatter(
-    noclasses=True,
-    style="monokai",
-    nowrap=True,
-    nobackground=True,
-)
+_DEFAULT_CODE_THEME = "paraiso-dark"
+
+
+def _get_code_theme() -> str:
+    try:
+        from modules.utils.config import ConfigService
+
+        return ConfigService().get_settings_data().get("code_theme", _DEFAULT_CODE_THEME)
+    except Exception:
+        return _DEFAULT_CODE_THEME
+
+
+def _create_formatter(style: str = "") -> HtmlFormatter:
+    return HtmlFormatter(
+        noclasses=True,
+        style=style or _get_code_theme(),
+        nowrap=True,
+        nobackground=True,
+    )
 
 _CSS = f"""
 body {{
     background-color: {COLOR_BUBBLE_TEXT_EDIT_BG};
     color: {COLOR_TEXT};
     font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    font-size: 15px;
+    font-size: 16px;
     line-height: 1.3;
     margin: 0;
     padding: 4px 0;
@@ -73,40 +86,45 @@ code {{
     font-family: "Menlo", "Monaco", "Consolas", monospace;
     font-size: 12px;
 }}
-a.copy-link {{
+a.copy-link, a.copy-link:visited, a.copy-link:active, a.copy-link:focus {{
     color: {COLOR_TEXT_HINT};
     text-decoration: none;
-    font-size: 13px;
-    padding: 0px 2px;
+    padding: 0px;
+    outline: none;
+    border: none;
+    background: transparent;
 }}
 a.copy-link:hover {{
     color: {COLOR_TEXT_LIGHT_GRAY};
 }}
-table.code-header {{
-    width: 100%;
+table.code-wrapper {{
+    border: none;
     border-spacing: 0;
-    margin: 0;
-    padding: 0;
+    margin: 6px 0;
+    background-color: #222222;
 }}
-td.lang-label {{
-    color: {COLOR_TEXT_HINT};
-    font-size: 10px;
-    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    padding: 4px 8px;
-    text-align: left;
-}}
-td.copy-cell {{
-    text-align: right;
-    padding: 4px 8px;
-}}
-div.code-body {{
-    padding: 8px 12px;
-    margin: 0 0 8px 0;
+td.code-body {{
+    padding: 10px 14px;
     font-family: "Menlo", "Monaco", "Consolas", monospace;
-    font-size: 11px;
+    font-size: 14px;
     line-height: 1.4;
     color: {COLOR_TEXT};
     white-space: pre;
+}}
+table.code-toolbar {{
+    border: none;
+    border-spacing: 0;
+    margin: 0 0 4px 0;
+}}
+td.lang-label {{
+    color: {COLOR_TEXT_SECONDARY};
+    font-size: 14px;
+    font-family: "Menlo", "Monaco", "Consolas", monospace;
+    padding: 0;
+}}
+td.copy-cell {{
+    text-align: right;
+    padding: 0;
 }}
 blockquote {{
     border-left: 3px solid {COLOR_TEXT_HINT};
@@ -125,6 +143,54 @@ a {{
 """
 
 
+_LANG_DISPLAY_NAMES = {
+    "ts": "TypeScript",
+    "tsx": "TypeScript (JSX)",
+    "js": "JavaScript",
+    "jsx": "JavaScript (JSX)",
+    "py": "Python",
+    "rb": "Ruby",
+    "rs": "Rust",
+    "go": "Go",
+    "java": "Java",
+    "kt": "Kotlin",
+    "cs": "C#",
+    "cpp": "C++",
+    "c": "C",
+    "sh": "Shell",
+    "bash": "Bash",
+    "zsh": "Zsh",
+    "ps1": "PowerShell",
+    "sql": "SQL",
+    "html": "HTML",
+    "css": "CSS",
+    "scss": "SCSS",
+    "json": "JSON",
+    "yaml": "YAML",
+    "yml": "YAML",
+    "toml": "TOML",
+    "xml": "XML",
+    "md": "Markdown",
+    "dockerfile": "Dockerfile",
+    "swift": "Swift",
+    "php": "PHP",
+    "lua": "Lua",
+    "r": "R",
+    "dart": "Dart",
+    "zig": "Zig",
+    "elixir": "Elixir",
+    "ex": "Elixir",
+    "erl": "Erlang",
+    "hs": "Haskell",
+    "scala": "Scala",
+    "clj": "Clojure",
+    "vim": "Vim Script",
+    "graphql": "GraphQL",
+    "proto": "Protobuf",
+    "tf": "Terraform",
+}
+
+
 @dataclass
 class MarkdownResult:
     html: str = ""
@@ -133,10 +199,11 @@ class MarkdownResult:
 
 class _DarkHTMLRenderer(HTMLRenderer):
 
-    def __init__(self, highlight_code: bool = True):
+    def __init__(self, highlight_code: bool = True, confirmed_copy_index: int = -1):
         super().__init__()
         self.code_blocks: list[str] = []
         self.highlight_code = highlight_code
+        self._confirmed_copy_index = confirmed_copy_index
 
     def block_code(self, text: str, **attrs: Any) -> str:
         raw_code = text.rstrip("\n")
@@ -146,30 +213,47 @@ class _DarkHTMLRenderer(HTMLRenderer):
         index = len(self.code_blocks)
         self.code_blocks.append(raw_code)
 
-        copy_icon = (
-            '<img src="data:image/svg+xml;utf8,'
-            '<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;14&quot; height=&quot;14&quot; '
-            'viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;%23888888&quot; '
-            'stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;>'
-            '<rect width=&quot;14&quot; height=&quot;14&quot; x=&quot;8&quot; y=&quot;8&quot; rx=&quot;2&quot;/>'
-            '<path d=&quot;M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2&quot;/>'
-            '</svg>" width="14" height="14">'
-        )
-        copy_link = f'<a class="copy-link" href="copy-code:{index}">{copy_icon}</a>'
-        lang_display = escape(lang)
+        if index == self._confirmed_copy_index:
+            icon = (
+                '<img src="data:image/svg+xml;utf8,'
+                '<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;16&quot; height=&quot;16&quot; '
+                'viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;%23888888&quot; '
+                'stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;>'
+                '<polyline points=&quot;20 6 9 17 4 12&quot;/>'
+                '</svg>" width="16" height="16">'
+            )
+        else:
+            icon = (
+                '<img src="data:image/svg+xml;utf8,'
+                '<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;16&quot; height=&quot;16&quot; '
+                'viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;%23888888&quot; '
+                'stroke-width=&quot;2&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot;>'
+                '<rect width=&quot;14&quot; height=&quot;14&quot; x=&quot;8&quot; y=&quot;8&quot; rx=&quot;2&quot;/>'
+                '<path d=&quot;M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2&quot;/>'
+                '</svg>" width="16" height="16">'
+            )
+        copy_link = f'<a class="copy-link" href="copy-code:{index}">{icon}</a>'
+        lang_display = escape(_LANG_DISPLAY_NAMES.get(lang.lower(), lang))
 
-        header_html = (
-            f'<table class="code-header"><tr>'
+        toolbar = (
+            f'<table class="code-toolbar" width="100%"><tr>'
             f'<td class="lang-label">{lang_display}</td>'
             f'<td class="copy-cell">{copy_link}</td>'
             f'</tr></table>'
         )
 
+        def _wrap_code_block(code_html: str) -> str:
+            return (
+                f'<table class="code-wrapper" width="100%"><tr>'
+                f'<td class="code-body">{toolbar}{code_html}</td>'
+                f'</tr></table>\n'
+            )
+
         if self.highlight_code and lang:
             try:
                 lexer = get_lexer_by_name(lang, stripall=True)
-                highlighted = highlight(raw_code, lexer, _DARK_FORMATTER)
-                return f'{header_html}<div class="code-body">{highlighted}</div>\n'
+                highlighted = highlight(raw_code, lexer, _create_formatter())
+                return _wrap_code_block(highlighted)
             except ClassNotFound:
                 pass
 
@@ -177,19 +261,23 @@ class _DarkHTMLRenderer(HTMLRenderer):
             try:
                 lexer = guess_lexer(raw_code)
                 if lexer.analyse_text(raw_code) > 0.3:
-                    highlighted = highlight(raw_code, lexer, _DARK_FORMATTER)
-                    return f'{header_html}<div class="code-body">{highlighted}</div>\n'
+                    highlighted = highlight(raw_code, lexer, _create_formatter())
+                    return _wrap_code_block(highlighted)
             except ClassNotFound:
                 pass
 
-        return f'{header_html}<div class="code-body">{escape(raw_code)}</div>\n'
+        return _wrap_code_block(escape(raw_code))
 
 
-def render_markdown(text: str, highlight_code: bool = True) -> MarkdownResult:
+def render_markdown(
+    text: str, highlight_code: bool = True, confirmed_copy_index: int = -1
+) -> MarkdownResult:
     if not text or not text.strip():
         return MarkdownResult()
 
-    renderer = _DarkHTMLRenderer(highlight_code=highlight_code)
+    renderer = _DarkHTMLRenderer(
+        highlight_code=highlight_code, confirmed_copy_index=confirmed_copy_index
+    )
     md = mistune.create_markdown(renderer=renderer, plugins=["strikethrough", "table"])
 
     html_body = md(text)

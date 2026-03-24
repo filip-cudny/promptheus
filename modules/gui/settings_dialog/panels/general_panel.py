@@ -1,11 +1,13 @@
 """General settings panel."""
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QCheckBox,
     QFormLayout,
     QLabel,
     QSpinBox,
+    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
@@ -19,8 +21,43 @@ from modules.gui.shared.theme import (
     SVG_CHEVRON_DOWN_PATH,
     SVG_CHEVRON_UP_PATH,
 )
+from pygments.styles import get_all_styles
+
 from modules.gui.shared.widgets import NoScrollComboBox
 from modules.utils.config import ConfigService
+
+_DARK_THEMES = {
+    "dracula", "paraiso-dark", "gruvbox-dark", "monokai", "native",
+    "nord", "nord-darker", "one-dark", "paraiso-dark", "solarized-dark",
+    "stata-dark", "vim", "zenburn", "fruity", "inkpot", "rrt",
+}
+
+_PREVIEW_CODE = '''\
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  roles: string[];
+  isActive: boolean;
+}
+
+const DEFAULT_ROLES = ["viewer"];
+
+function createUser(name: string, email: string): User {
+  return {
+    id: Math.floor(Math.random() * 10000),
+    name,
+    email,
+    roles: [...DEFAULT_ROLES],
+    isActive: true,
+  };
+}
+
+const users: Map<number, User> = new Map();
+const admin = createUser("Max", "max@example.com");
+admin.roles.push("admin");
+users.set(admin.id, admin);
+'''
 
 from ..settings_panel_base import SettingsPanelBase
 
@@ -132,7 +169,34 @@ class GeneralPanel(SettingsPanelBase):
         self._debug_mode_checkbox.stateChanged.connect(self._on_debug_mode_changed)
         form_layout.addRow("", self._debug_mode_checkbox)
 
+        self._code_theme_combo = NoScrollComboBox()
+        self._code_theme_combo.setStyleSheet(FORM_STYLE)
+        self._populate_code_theme_combo()
+        self._code_theme_combo.currentIndexChanged.connect(self._on_code_theme_changed)
+
+        code_theme_label = QLabel("Code Block Theme:")
+        code_theme_label.setStyleSheet(f"color: {COLOR_TEXT};")
+        code_theme_label.setToolTip("Syntax highlighting theme for code blocks in assistant responses")
+        form_layout.addRow(code_theme_label, self._code_theme_combo)
+
         layout.addWidget(form_container)
+
+        self._theme_preview = QTextBrowser()
+        self._theme_preview.setFont(QFont("Menlo, Monaco, Consolas, monospace", 10))
+        self._theme_preview.setReadOnly(True)
+        self._theme_preview.setOpenLinks(False)
+        self._theme_preview.setMinimumHeight(100)
+        self._theme_preview.setStyleSheet(f"""
+            QTextBrowser {{
+                background-color: #222222;
+                color: {COLOR_TEXT};
+                border: 1px solid {COLOR_BORDER};
+                border-radius: 4px;
+                padding: 8px;
+            }}
+        """)
+        self._update_theme_preview()
+        layout.addWidget(self._theme_preview, 1)
 
     def _populate_model_combo(self):
         """Populate the model dropdown from config."""
@@ -169,6 +233,43 @@ class GeneralPanel(SettingsPanelBase):
         debug_mode = settings_data.get("debug_mode", False)
         self._debug_mode_checkbox.setChecked(debug_mode)
 
+    def _populate_code_theme_combo(self):
+        self._code_theme_combo.clear()
+        settings_data = self._config_service.get_settings_data()
+        current_theme = settings_data.get("code_theme", "paraiso-dark")
+
+        all_styles = sorted(get_all_styles())
+        dark_styles = sorted(s for s in all_styles if s in _DARK_THEMES)
+        other_styles = sorted(s for s in all_styles if s not in _DARK_THEMES)
+
+        for style_name in dark_styles:
+            self._code_theme_combo.addItem(style_name, style_name)
+        if dark_styles and other_styles:
+            self._code_theme_combo.insertSeparator(self._code_theme_combo.count())
+        for style_name in other_styles:
+            self._code_theme_combo.addItem(style_name, style_name)
+
+        for i in range(self._code_theme_combo.count()):
+            if self._code_theme_combo.itemData(i) == current_theme:
+                self._code_theme_combo.setCurrentIndex(i)
+                break
+
+    def _update_theme_preview(self):
+        from pygments import highlight as pyg_highlight
+        from pygments.formatters import HtmlFormatter
+        from pygments.lexers import TypeScriptLexer
+
+        style_name = self._code_theme_combo.currentData() or "paraiso-dark"
+        formatter = HtmlFormatter(noclasses=True, style=style_name, nowrap=True, nobackground=True)
+        highlighted = pyg_highlight(_PREVIEW_CODE, TypeScriptLexer(), formatter)
+        html = f'<pre style="margin:0; white-space:pre; line-height:1.5;">{highlighted}</pre>'
+        self._theme_preview.setHtml(html)
+
+    def _on_code_theme_changed(self, index: int):
+        if index >= 0:
+            self._update_theme_preview()
+            self.mark_dirty()
+
     def _on_model_changed(self, index: int):
         """Handle model selection change."""
         if index >= 0:
@@ -202,12 +303,17 @@ class GeneralPanel(SettingsPanelBase):
         debug_mode = self._debug_mode_checkbox.isChecked()
         self._config_service.update_setting("debug_mode", debug_mode, persist=False)
 
+        code_theme = self._code_theme_combo.currentData()
+        if code_theme:
+            self._config_service.update_setting("code_theme", code_theme, persist=False)
+
         self.mark_clean()
         return True
 
     def load_settings(self) -> None:
         """Reload settings from config."""
         self._populate_model_combo()
+        self._populate_code_theme_combo()
         self._load_debounce_value()
         self._load_tray_icon_value()
         self._load_debug_mode_value()

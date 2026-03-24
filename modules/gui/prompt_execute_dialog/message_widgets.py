@@ -391,24 +391,36 @@ class AssistantBubble(QWidget):
     def _active_widget(self):
         return self.text_edit if not self._rendered_mode else self.text_browser
 
-    def _render_content(self, text: str, highlight_code: bool = True):
+    def _render_content(
+        self, text: str, highlight_code: bool = True, confirmed_copy_index: int = -1
+    ):
         from modules.gui.shared.markdown_renderer import render_markdown
 
-        result = render_markdown(text, highlight_code=highlight_code)
+        result = render_markdown(
+            text, highlight_code=highlight_code, confirmed_copy_index=confirmed_copy_index
+        )
         self._code_blocks = result.code_blocks
         self.text_browser.setHtml(result.html)
 
     def _on_anchor_clicked(self, url):
         url_str = url.toString()
         if url_str.startswith("copy-code:"):
+            copied_index = -1
             try:
-                index = int(url_str.split(":")[1])
-                if 0 <= index < len(self._code_blocks):
+                copied_index = int(url_str.split(":")[1])
+                if 0 <= copied_index < len(self._code_blocks):
                     from PySide6.QtWidgets import QApplication
 
-                    QApplication.clipboard().setText(self._code_blocks[index])
+                    QApplication.clipboard().setText(self._code_blocks[copied_index])
             except (ValueError, IndexError):
                 pass
+            self._render_content(
+                self._raw_content, highlight_code=True, confirmed_copy_index=copied_index
+            )
+            QTimer.singleShot(
+                2000,
+                lambda: self._render_content(self._raw_content, highlight_code=True),
+            )
 
     def _copy_raw_content(self):
         from PySide6.QtWidgets import QApplication

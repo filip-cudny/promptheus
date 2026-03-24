@@ -1,6 +1,7 @@
 {
   "show_tray_icon": true,
   "debug_mode": false,
+  "code_theme": "paraiso-dark",
   "menu_section_order": [
     "ContextMenuProvider",
     "LastInteractionMenuProvider",
