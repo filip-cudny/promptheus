@@ -159,11 +159,15 @@ class ExecutionHandler:
         if not self._is_streaming and not is_final:
             self._is_streaming = True
             self._streaming_accumulated = ""
+            self.dialog._user_scrolled_up = False
 
         self._streaming_accumulated = accumulated
 
         if is_final:
             self._flush_streaming_update()
+            bubble = self._get_current_assistant_bubble()
+            if bubble:
+                bubble.finalize_content()
             self._is_streaming = False
             self._streaming_throttle_timer.stop()
             return
@@ -185,44 +189,50 @@ class ExecutionHandler:
 
         self._last_ui_update_time = time.time() * 1000
 
-        # If tab is NOT active, only keep accumulated content (don't touch shared state).
-        # Content is preserved in _streaming_accumulated for when tab becomes active.
         if not self._is_tab_active():
             return
 
         dialog = self.dialog
 
-        # Update tree node content during streaming (in case of rebuild)
         if dialog._conversation_tree and self._pending_assistant_node_id:
             node = dialog._conversation_tree.get_node(self._pending_assistant_node_id)
             if node:
                 node.content = self._streaming_accumulated
 
-        # Get correct output text edit based on turn number
-        output_edit = self._get_current_output_edit()
+        bubble = self._get_current_assistant_bubble()
+        if bubble:
+            bubble.set_content(self._streaming_accumulated, is_streaming=True)
+            if hasattr(bubble, "header") and not bubble.header.is_wrapped():
+                widget = bubble._active_widget()
+                content_height = get_text_edit_content_height(widget, min_height=BUBBLE_TEXT_EDIT_MIN_HEIGHT)
+                widget.setMinimumHeight(content_height)
+                widget.setMaximumHeight(content_height)
+        else:
+            output_edit = self._get_current_output_edit()
+            output_edit.blockSignals(True)
+            output_edit.setPlainText(self._streaming_accumulated)
+            cursor = output_edit.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            output_edit.setTextCursor(cursor)
+            output_edit.blockSignals(False)
 
-        # Update text without triggering undo stack
-        output_edit.blockSignals(True)
-        output_edit.setPlainText(self._streaming_accumulated)
-        cursor = output_edit.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        output_edit.setTextCursor(cursor)
-        output_edit.blockSignals(False)
-
-        # Update height for tree-based bubbles in expanded mode during streaming
-        if self._pending_assistant_node_id:
-            for bubble in reversed(dialog._message_bubbles):
-                if hasattr(bubble, "node_id") and bubble.node_id == self._pending_assistant_node_id:
-                    if hasattr(bubble, "header") and not bubble.header.is_wrapped():
-                        content_height = get_text_edit_content_height(
-                            bubble.text_edit, min_height=BUBBLE_TEXT_EDIT_MIN_HEIGHT
-                        )
-                        bubble.text_edit.setMinimumHeight(content_height)
-                        bubble.text_edit.setMaximumHeight(content_height)
-                    break
-
-        # Auto-scroll to show new streaming content
         self.dialog._scroll_to_bottom()
+
+    def _get_current_assistant_bubble(self):
+        from modules.gui.prompt_execute_dialog.message_widgets import AssistantBubble
+
+        dialog = self.dialog
+        if dialog._conversation_tree and not dialog._conversation_tree.is_empty():
+            if self._pending_assistant_node_id:
+                for bubble in reversed(dialog._message_bubbles):
+                    if isinstance(bubble, AssistantBubble) and bubble.node_id == self._pending_assistant_node_id:
+                        return bubble
+            for bubble in reversed(dialog._message_bubbles):
+                if isinstance(bubble, AssistantBubble):
+                    node = dialog._conversation_tree.get_node(bubble.node_id)
+                    if node and node.role == "assistant":
+                        return bubble
+        return None
 
     def _get_current_output_edit(self):
         """Get the current output text edit based on turn number."""
@@ -499,7 +509,7 @@ class ExecutionHandler:
         for i, turn in enumerate(dialog._conversation_turns):
             turn_data = {
                 "role": "user",
-                "text": turn.message_text,
+                "text": turn.message_text.strip(),
                 "images": [
                     {"data": img.data, "media_type": img.media_type or "image/png"} for img in turn.message_images
                 ],
@@ -514,10 +524,10 @@ class ExecutionHandler:
             if turn.is_complete and turn.output_versions:
                 # Use the currently selected version
                 selected_text = turn.output_versions[turn.current_version_index]
-                turns.append({"role": "assistant", "text": selected_text})
+                turns.append({"role": "assistant", "text": selected_text.strip()})
             elif turn.is_complete and turn.output_text:
                 # Fallback for backward compatibility
-                turns.append({"role": "assistant", "text": turn.output_text})
+                turns.append({"role": "assistant", "text": turn.output_text.strip()})
 
         return {"turns": turns}
 
@@ -538,7 +548,7 @@ class ExecutionHandler:
         for i, (user_node, assistant_node) in enumerate(pairs):
             turn_data = {
                 "role": "user",
-                "text": user_node.content,
+                "text": user_node.content.strip(),
                 "images": [
                     {"data": img.data, "media_type": img.media_type or "image/png"} for img in user_node.images
                 ],
@@ -550,7 +560,7 @@ class ExecutionHandler:
             turns.append(turn_data)
 
             if assistant_node and assistant_node.content:
-                turns.append({"role": "assistant", "text": assistant_node.content})
+                turns.append({"role": "assistant", "text": assistant_node.content.strip()})
 
         return {"turns": turns}
 
@@ -735,14 +745,26 @@ class ExecutionHandler:
             dialog._rebuild_message_bubbles_from_tree()
 
         # Update output text widget
-        output_edit = self._get_current_output_edit()
+        bubble = self._get_current_assistant_bubble()
         if is_pending or not is_streaming or not result.success:
             if result.success and output_text:
-                output_edit.setPlainText(output_text)
+                if bubble:
+                    bubble.set_content(output_text)
+                    bubble.finalize_content()
+                else:
+                    self._get_current_output_edit().setPlainText(output_text)
             elif result.error:
-                output_edit.setPlainText(f"Error: {result.error}")
+                error_text = f"Error: {result.error}"
+                if bubble:
+                    bubble.set_content(error_text)
+                else:
+                    self._get_current_output_edit().setPlainText(error_text)
             else:
-                output_edit.setPlainText("No output received")
+                no_output_text = "No output received"
+                if bubble:
+                    bubble.set_content(no_output_text)
+                else:
+                    self._get_current_output_edit().setPlainText(no_output_text)
 
         # Adjust height for legacy sections
         if not is_pending:

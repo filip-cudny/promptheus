@@ -473,7 +473,7 @@ def get_text_edit_content_height(text_edit, min_height: int = 100) -> int:
     doc = text_edit.document()
     doc.setTextWidth(text_edit.viewport().width())
     margins = text_edit.contentsMargins()
-    height = int(doc.size().height()) + margins.top() + margins.bottom() + 20
+    height = int(doc.size().height()) + margins.top() + margins.bottom() + 6
     return max(height, min_height)
 
 

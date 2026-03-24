@@ -1,11 +1,9 @@
 """Chat-style message bubble widgets for PromptExecuteDialog."""
 
-from typing import TYPE_CHECKING
-
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
-from core.context_manager import ContextItem, ContextItemType
+from core.context_manager import ContextItem
 from modules.gui.shared.theme import (
     COLOR_ACCENT_ASSISTANT,
     COLOR_ACCENT_USER,
@@ -20,11 +18,9 @@ from modules.gui.shared.widgets import (
     BUBBLE_TEXT_EDIT_MIN_HEIGHT,
     CollapsibleSectionHeader,
     ImageChipWidget,
+    create_markdown_browser,
     create_text_edit,
 )
-
-if TYPE_CHECKING:
-    from modules.gui.prompt_execute_dialog.dialog import PromptExecuteDialog
 
 
 def _create_role_badge_container(role: str, turn_number: int) -> tuple[QWidget, QLabel]:
@@ -146,6 +142,13 @@ class UserMessageBubble(QWidget):
         self.text_edit.setMaximumHeight(content_height)
         self.header.set_wrap_state(False)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not self.header.is_wrapped() and self.text_edit.isVisible():
+            content_height = get_text_edit_content_height(self.text_edit, min_height=BUBBLE_TEXT_EDIT_MIN_HEIGHT)
+            self.text_edit.setMinimumHeight(content_height)
+            self.text_edit.setMaximumHeight(content_height)
 
     def _toggle_section(self):
         is_visible = self.text_edit.isVisible()
@@ -281,14 +284,11 @@ class UserMessageBubble(QWidget):
 
 
 class AssistantBubble(QWidget):
-    """Chat bubble widget for assistant (AI) responses.
+    """Chat bubble widget for assistant (AI) responses with markdown rendering.
 
-    Features:
-    - Collapsible header with "Output #N" label
-    - Regenerate button (refresh-cw icon)
-    - Branch navigation (prev/next arrows + "1/3" label)
-    - Undo/redo buttons, wrap toggle
-    - Editable text edit
+    Supports two modes:
+    - Rendered: QTextBrowser with markdown/syntax highlighting (default)
+    - Raw: QTextEdit for plain text editing
     """
 
     text_changed = Signal()
@@ -308,6 +308,10 @@ class AssistantBubble(QWidget):
         super().__init__(parent)
         self.node_id = node_id
         self.output_number = output_number
+
+        self._raw_content = content
+        self._code_blocks: list[str] = []
+        self._rendered_mode = True
 
         self._undo_stack: list[str] = []
         self._redo_stack: list[str] = []
@@ -345,17 +349,23 @@ class AssistantBubble(QWidget):
             show_wrap_button=True,
             show_version_nav=True,
             show_regenerate_button=True,
+            show_copy_content_button=True,
+            show_render_toggle=True,
             badge_widget=badge_container,
         )
         layout.addWidget(self.header)
+
+        self.text_browser = create_markdown_browser(min_height=BUBBLE_TEXT_EDIT_MIN_HEIGHT)
+        self.text_browser.anchorClicked.connect(self._on_anchor_clicked)
+        layout.addWidget(self.text_browser)
 
         self.text_edit = create_text_edit(
             placeholder="Output will appear here...",
             min_height=BUBBLE_TEXT_EDIT_MIN_HEIGHT,
             is_bubble=True,
         )
-        self.text_edit.setPlainText(content)
         self.text_edit.textChanged.connect(self._on_text_changed)
+        self.text_edit.hide()
         layout.addWidget(self.text_edit)
 
         self.header.toggle_requested.connect(self._toggle_section)
@@ -366,16 +376,91 @@ class AssistantBubble(QWidget):
         self.header.regenerate_requested.connect(lambda: self.regenerate_requested.emit(self.node_id))
         self.header.version_prev_requested.connect(lambda: self.branch_prev_requested.emit(self.node_id))
         self.header.version_next_requested.connect(lambda: self.branch_next_requested.emit(self.node_id))
+        self.header.copy_content_requested.connect(self._copy_raw_content)
+        self.header.render_toggle_requested.connect(self._toggle_render_mode)
 
-        content_height = get_text_edit_content_height(self.text_edit, min_height=BUBBLE_TEXT_EDIT_MIN_HEIGHT)
-        self.text_edit.setMinimumHeight(content_height)
-        self.text_edit.setMaximumHeight(content_height)
+        self._render_content(content, highlight_code=True)
+
+        content_height = get_text_edit_content_height(self.text_browser, min_height=BUBBLE_TEXT_EDIT_MIN_HEIGHT)
+        self.text_browser.setMinimumHeight(content_height)
+        self.text_browser.setMaximumHeight(content_height)
         self.header.set_wrap_state(False)
+        self.header.set_undo_redo_enabled(False, False)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
+    def _active_widget(self):
+        return self.text_edit if not self._rendered_mode else self.text_browser
+
+    def _render_content(self, text: str, highlight_code: bool = True):
+        from modules.gui.shared.markdown_renderer import render_markdown
+
+        result = render_markdown(text, highlight_code=highlight_code)
+        self._code_blocks = result.code_blocks
+        self.text_browser.setHtml(result.html)
+
+    def _on_anchor_clicked(self, url):
+        url_str = url.toString()
+        if url_str.startswith("copy-code:"):
+            try:
+                index = int(url_str.split(":")[1])
+                if 0 <= index < len(self._code_blocks):
+                    from PySide6.QtWidgets import QApplication
+
+                    QApplication.clipboard().setText(self._code_blocks[index])
+            except (ValueError, IndexError):
+                pass
+
+    def _copy_raw_content(self):
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.clipboard().setText(self._raw_content)
+
+    def _toggle_render_mode(self):
+        if self._rendered_mode:
+            self._raw_content = self._get_raw_from_current_mode()
+            self.text_edit.blockSignals(True)
+            self.text_edit.setPlainText(self._raw_content)
+            self.text_edit.blockSignals(False)
+            self._last_text = self._raw_content
+            self.text_browser.hide()
+            self.text_edit.show()
+            self._rendered_mode = False
+        else:
+            self._raw_content = self.text_edit.toPlainText()
+            self._render_content(self._raw_content, highlight_code=True)
+            self.text_edit.hide()
+            self.text_browser.show()
+            self._rendered_mode = True
+
+        self.header.set_render_mode(self._rendered_mode)
+        self.header.set_undo_redo_enabled(
+            not self._rendered_mode and bool(self._undo_stack),
+            not self._rendered_mode and bool(self._redo_stack),
+        )
+
+        if not self.header.is_wrapped():
+            widget = self._active_widget()
+            content_height = get_text_edit_content_height(widget, min_height=BUBBLE_TEXT_EDIT_MIN_HEIGHT)
+            widget.setMinimumHeight(content_height)
+            widget.setMaximumHeight(content_height)
+
+    def _get_raw_from_current_mode(self) -> str:
+        if self._rendered_mode:
+            return self._raw_content
+        return self.text_edit.toPlainText()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        widget = self._active_widget()
+        if not self.header.is_wrapped() and widget.isVisible():
+            content_height = get_text_edit_content_height(widget, min_height=BUBBLE_TEXT_EDIT_MIN_HEIGHT)
+            widget.setMinimumHeight(content_height)
+            widget.setMaximumHeight(content_height)
+
     def _toggle_section(self):
-        is_visible = self.text_edit.isVisible()
-        self.text_edit.setVisible(not is_visible)
+        widget = self._active_widget()
+        is_visible = widget.isVisible()
+        widget.setVisible(not is_visible)
         self.header.set_collapsed(is_visible)
         if is_visible:
             self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -388,14 +473,15 @@ class AssistantBubble(QWidget):
         is_wrapped = self.header.is_wrapped()
         new_wrapped = not is_wrapped
         self.header.set_wrap_state(new_wrapped)
+        widget = self._active_widget()
         if new_wrapped:
-            self.text_edit.setMinimumHeight(BUBBLE_TEXT_EDIT_MIN_HEIGHT)
-            self.text_edit.setMaximumHeight(QWIDGETSIZE_MAX)
+            widget.setMinimumHeight(BUBBLE_TEXT_EDIT_MIN_HEIGHT)
+            widget.setMaximumHeight(QWIDGETSIZE_MAX)
             self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         else:
-            content_height = get_text_edit_content_height(self.text_edit, min_height=BUBBLE_TEXT_EDIT_MIN_HEIGHT)
-            self.text_edit.setMinimumHeight(content_height)
-            self.text_edit.setMaximumHeight(content_height)
+            content_height = get_text_edit_content_height(widget, min_height=BUBBLE_TEXT_EDIT_MIN_HEIGHT)
+            widget.setMinimumHeight(content_height)
+            widget.setMaximumHeight(content_height)
             self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
     def _on_text_changed(self):
@@ -415,10 +501,13 @@ class AssistantBubble(QWidget):
             self._update_undo_redo_buttons()
 
     def _update_undo_redo_buttons(self):
-        self.header.set_undo_redo_enabled(bool(self._undo_stack), bool(self._redo_stack))
+        if self._rendered_mode:
+            self.header.set_undo_redo_enabled(False, False)
+        else:
+            self.header.set_undo_redo_enabled(bool(self._undo_stack), bool(self._redo_stack))
 
     def undo(self):
-        if not self._undo_stack:
+        if self._rendered_mode or not self._undo_stack:
             return
         current = self.text_edit.toPlainText()
         self._redo_stack.append(current)
@@ -430,7 +519,7 @@ class AssistantBubble(QWidget):
         self._update_undo_redo_buttons()
 
     def redo(self):
-        if not self._redo_stack:
+        if self._rendered_mode or not self._redo_stack:
             return
         current = self.text_edit.toPlainText()
         self._undo_stack.append(current)
@@ -442,13 +531,27 @@ class AssistantBubble(QWidget):
         self._update_undo_redo_buttons()
 
     def get_content(self) -> str:
-        return self.text_edit.toPlainText()
+        return self._get_raw_from_current_mode()
 
-    def set_content(self, content: str):
-        self.text_edit.blockSignals(True)
-        self.text_edit.setPlainText(content)
-        self.text_edit.blockSignals(False)
+    def set_content(self, content: str, is_streaming: bool = False):
+        self._raw_content = content
+        if self._rendered_mode:
+            self._render_content(content, highlight_code=not is_streaming)
+        else:
+            self.text_edit.blockSignals(True)
+            self.text_edit.setPlainText(content)
+            self.text_edit.blockSignals(False)
         self._last_text = content
+
+    def finalize_content(self):
+        if self._rendered_mode:
+            self._render_content(self._raw_content, highlight_code=True)
+            if not self.header.is_wrapped():
+                content_height = get_text_edit_content_height(
+                    self.text_browser, min_height=BUBBLE_TEXT_EDIT_MIN_HEIGHT
+                )
+                self.text_browser.setMinimumHeight(content_height)
+                self.text_browser.setMaximumHeight(content_height)
 
     def set_output_number(self, number: int):
         self.output_number = number
@@ -459,21 +562,13 @@ class AssistantBubble(QWidget):
         self.header.set_delete_button_visible(visible)
 
     def set_branch_info(self, current: int, total: int):
-        """Update branch navigation display.
-
-        Args:
-            current: Current branch number (1-indexed)
-            total: Total number of sibling branches
-        """
         self.header.set_version_info(current, total)
 
     def set_regenerate_enabled(self, enabled: bool):
-        """Enable or disable the regenerate button."""
         self.header.set_regenerate_button_enabled(enabled)
 
     def clear_undo_stack(self):
-        """Clear the undo/redo stacks (e.g., after regeneration)."""
         self._undo_stack.clear()
         self._redo_stack.clear()
-        self._last_text = self.text_edit.toPlainText()
+        self._last_text = self._raw_content
         self._update_undo_redo_buttons()

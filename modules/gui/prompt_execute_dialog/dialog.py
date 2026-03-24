@@ -218,6 +218,7 @@ class PromptExecuteDialog(BaseDialog):
         self._tab_counter: int = 0
         self._tab_bar: ConversationTabBar | None = None
         self._tab_scroll: QScrollArea | None = None
+        self._user_scrolled_up = False
 
         # Extract prompt name for title
         prompt_name = menu_item.data.get("prompt_name", "Prompt") if menu_item.data else "Prompt"
@@ -281,6 +282,7 @@ class PromptExecuteDialog(BaseDialog):
         self.sections_layout.addStretch()
 
         self.scroll_area.setWidget(self.sections_container)
+        self.scroll_area.verticalScrollBar().valueChanged.connect(self._on_scroll_value_changed)
         layout.addWidget(self.scroll_area, 1)  # stretch factor 1 for scroll area
 
         # Section 2: Prompt Input (STICKY BOTTOM - outside scroll area)
@@ -787,13 +789,21 @@ class PromptExecuteDialog(BaseDialog):
             self.output_edit.setMinimumHeight(content_height)
         self.save_section_state("output_wrapped", new_wrapped)
 
+    def _on_scroll_value_changed(self):
+        if not self._is_streaming:
+            return
+        scrollbar = self.scroll_area.verticalScrollBar()
+        if scrollbar.value() < scrollbar.maximum() - 20:
+            self._user_scrolled_up = True
+
     def _scroll_to_bottom(self):
-        """Scroll the scroll area to the bottom."""
-        # Use a small delay to ensure layout is complete before scrolling
+        if self._user_scrolled_up:
+            return
         QTimer.singleShot(50, self._do_scroll_to_bottom)
 
     def _do_scroll_to_bottom(self):
-        """Perform the actual scroll to bottom."""
+        if self._user_scrolled_up:
+            return
         self.scroll_area.verticalScrollBar().setValue(self.scroll_area.verticalScrollBar().maximum())
 
     # --- UI state persistence ---
@@ -1440,6 +1450,7 @@ class PromptExecuteDialog(BaseDialog):
                 assistant_bubble.branch_prev_requested.connect(self._on_branch_prev)
                 assistant_bubble.branch_next_requested.connect(self._on_branch_next)
                 assistant_bubble.text_edit.installEventFilter(self)
+                assistant_bubble.text_browser.installEventFilter(self)
                 self._message_bubbles.append(assistant_bubble)
                 insert_idx = self.sections_layout.count() - 1
                 self.sections_layout.insertWidget(insert_idx, assistant_bubble)

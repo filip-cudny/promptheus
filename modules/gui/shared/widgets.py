@@ -66,6 +66,8 @@ class CollapsibleSectionHeader(QWidget):
     version_prev_requested = Signal()
     version_next_requested = Signal()
     regenerate_requested = Signal()
+    copy_content_requested = Signal()
+    render_toggle_requested = Signal()
 
     def __init__(
         self,
@@ -77,6 +79,8 @@ class CollapsibleSectionHeader(QWidget):
         show_version_nav: bool = False,
         show_regenerate_button: bool = False,
         show_info_button: bool = False,
+        show_copy_content_button: bool = False,
+        show_render_toggle: bool = False,
         hint_text: str = "",
         badge_widget: QWidget | None = None,
         parent: QWidget | None = None,
@@ -157,6 +161,23 @@ class CollapsibleSectionHeader(QWidget):
             self.regenerate_btn.setStyleSheet(ICON_BTN_STYLE)
             self.regenerate_btn.clicked.connect(lambda: self.regenerate_requested.emit())
             btn_layout.addWidget(self.regenerate_btn)
+
+        self.copy_content_btn = None
+        if show_copy_content_button:
+            self.copy_content_btn = IconButton("copy", size=16)
+            self.copy_content_btn.setToolTip("Copy raw markdown")
+            self.copy_content_btn.setStyleSheet(ICON_BTN_STYLE)
+            self.copy_content_btn.clicked.connect(lambda: self.copy_content_requested.emit())
+            btn_layout.addWidget(self.copy_content_btn)
+
+        self.render_toggle_btn = None
+        self._render_mode = True
+        if show_render_toggle:
+            self.render_toggle_btn = IconButton("edit", size=16)
+            self.render_toggle_btn.setToolTip("Switch to raw edit mode")
+            self.render_toggle_btn.setStyleSheet(ICON_BTN_STYLE)
+            self.render_toggle_btn.clicked.connect(lambda: self.render_toggle_requested.emit())
+            btn_layout.addWidget(self.render_toggle_btn)
 
         # Version navigation (optional) - shown only when multiple versions exist
         self.version_container = None
@@ -346,6 +367,18 @@ class CollapsibleSectionHeader(QWidget):
         """Enable or disable the regenerate button."""
         if self.regenerate_btn:
             self.regenerate_btn.setEnabled(enabled)
+
+    def set_render_mode(self, rendered: bool):
+        self._render_mode = rendered
+        if self.render_toggle_btn:
+            if rendered:
+                self.render_toggle_btn._icon_name = "edit"
+                self.render_toggle_btn._update_icon(ICON_COLOR_NORMAL)
+                self.render_toggle_btn.setToolTip("Switch to raw edit mode")
+            else:
+                self.render_toggle_btn._icon_name = "eye"
+                self.render_toggle_btn._update_icon(ICON_COLOR_NORMAL)
+                self.render_toggle_btn.setToolTip("Switch to rendered view")
 
 
 class ImageChipWidget(QWidget):
@@ -563,6 +596,40 @@ def create_text_edit(
         """)
 
     return text_edit
+
+
+def create_markdown_browser(min_height: int = BUBBLE_TEXT_EDIT_MIN_HEIGHT):
+    from PySide6.QtWidgets import QTextBrowser
+
+    from modules.gui.shared.theme import (
+        COLOR_BUBBLE_BORDER,
+        COLOR_BUBBLE_TEXT_EDIT_BG,
+        COLOR_SELECTION,
+        COLOR_TEXT,
+    )
+
+    browser = QTextBrowser()
+    browser.setFont(QFont("sans-serif", 15))
+    browser.setOpenLinks(False)
+    browser.setOpenExternalLinks(False)
+    browser.setReadOnly(True)
+    browser.setLineWrapMode(QTextEdit.WidgetWidth)
+    if min_height > 0:
+        browser.setMinimumHeight(min_height)
+    browser.setStyleSheet(f"""
+        QTextBrowser {{
+            background-color: {COLOR_BUBBLE_TEXT_EDIT_BG};
+            color: {COLOR_TEXT};
+            border: none;
+            border-top: 1px solid {COLOR_BUBBLE_BORDER};
+            border-bottom: 1px solid {COLOR_BUBBLE_BORDER};
+            border-radius: 0px;
+            padding: 8px;
+            margin-right: 14px;
+            selection-background-color: {COLOR_SELECTION};
+        }}
+    """)
+    return browser
 
 
 def create_header_button(

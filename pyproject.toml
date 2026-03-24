@@ -13,6 +13,8 @@ dependencies = [
     "sounddevice>=0.5.3",
     "numpy>=2.4.1",
     "openai>=2.15.0",
+    "mistune>=3.0.0",
+    "pygments>=2.18.0",
 ]
 
 [project.optional-dependencies]
