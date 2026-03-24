@@ -655,11 +655,12 @@ class ContextSectionWidget(QWidget):
 
     def _on_chip_copy(self, index: int):
         """Handle chip copy request."""
-        # Find the chip with this index and copy its content
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
         for chip in self._chips:
             if chip.index == index:
                 chip.copy_to_clipboard()
-                self._show_copied_notification()
+                flash_confirmation(chip.copy_btn)
                 break
 
     def _on_clear_all(self):
@@ -668,11 +669,13 @@ class ContextSectionWidget(QWidget):
 
     def _on_copy_text(self):
         """Handle copy text request from header button."""
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
         text_content = self.context_manager.get_context()
         if text_content:
             clipboard = QApplication.clipboard()
             clipboard.setText(text_content)
-            self._show_copied_notification()
+            flash_confirmation(self.header.copy_btn)
 
     def _on_edit_context(self):
         """Handle edit context request - open the context editor dialog."""
@@ -690,53 +693,65 @@ class ContextSectionWidget(QWidget):
 
     def _on_set_from_clipboard(self):
         """Handle set context from clipboard request."""
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
         if self.clipboard_manager is None:
             logger.warning("Cannot set context: clipboard_manager not available")
             return
 
-        # Check for image first, then text
+        success = False
         try:
             if self.clipboard_manager.has_image():
                 image_data = self.clipboard_manager.get_image_data()
                 if image_data:
                     base64_data, media_type = image_data
                     self.context_manager.set_context_image(base64_data, media_type)
-                    return
+                    success = True
         except Exception as e:
             logger.debug(f"Failed to get clipboard image: {e}")
 
-        # Try text content
-        try:
-            text = self.clipboard_manager.get_content()
-            if text and text.strip():
-                self.context_manager.set_context(text)
-        except Exception as e:
-            logger.warning(f"Failed to get clipboard text: {e}")
+        if not success:
+            try:
+                text = self.clipboard_manager.get_content()
+                if text and text.strip():
+                    self.context_manager.set_context(text)
+                    success = True
+            except Exception as e:
+                logger.warning(f"Failed to get clipboard text: {e}")
+
+        if success:
+            flash_confirmation(self.header.set_btn)
 
     def _on_append_from_clipboard(self):
         """Handle append clipboard to context request."""
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
         if self.clipboard_manager is None:
             logger.warning("Cannot append context: clipboard_manager not available")
             return
 
-        # Check for image first, then text
+        success = False
         try:
             if self.clipboard_manager.has_image():
                 image_data = self.clipboard_manager.get_image_data()
                 if image_data:
                     base64_data, media_type = image_data
                     self.context_manager.append_context_image(base64_data, media_type)
-                    return
+                    success = True
         except Exception as e:
             logger.debug(f"Failed to get clipboard image: {e}")
 
-        # Try text content
-        try:
-            text = self.clipboard_manager.get_content()
-            if text and text.strip():
-                self.context_manager.append_context(text)
-        except Exception as e:
-            logger.warning(f"Failed to get clipboard text: {e}")
+        if not success:
+            try:
+                text = self.clipboard_manager.get_content()
+                if text and text.strip():
+                    self.context_manager.append_context(text)
+                    success = True
+            except Exception as e:
+                logger.warning(f"Failed to get clipboard text: {e}")
+
+        if success:
+            flash_confirmation(self.header.append_btn)
 
     def _has_clipboard_content(self) -> bool:
         """Check if clipboard has any content (text or image).
@@ -767,13 +782,6 @@ class ContextSectionWidget(QWidget):
         """Handle show event - update clipboard button state."""
         super().showEvent(event)
         self._update_clipboard_button_state()
-
-    def _show_copied_notification(self):
-        """Show a 'Copied' notification."""
-        from modules.utils.notification_config import is_notification_enabled
-
-        if self.notification_manager and is_notification_enabled("clipboard_copy"):
-            self.notification_manager.show_success_notification("Copied")
 
     def cleanup(self):
         """Clean up resources."""
@@ -1149,11 +1157,10 @@ class LastInteractionSectionWidget(QWidget):
 
     def _on_copy(self, chip: LastInteractionChip):
         """Handle copy request from a chip."""
-        from modules.utils.notification_config import is_notification_enabled
+        from modules.gui.shared.icon_confirmation import flash_confirmation
 
         chip.copy_to_clipboard()
-        if self.notification_manager and is_notification_enabled("clipboard_copy"):
-            self.notification_manager.show_success_notification("Copied")
+        flash_confirmation(chip.copy_btn)
 
     def _on_details(self, title: str, content: str | None):
         """Handle details request - show preview dialog."""

@@ -35,7 +35,6 @@ from modules.gui.shared.theme import (
     TOOLTIP_STYLE,
 )
 from modules.gui.shared.undo_redo import TextEditUndoHelper
-from modules.utils.notification_config import is_notification_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -1127,7 +1126,8 @@ class ImageChipContainer(QWidget):
 
     def _on_copy(self, index: int):
         """Handle image copy request."""
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
         if 0 <= index < len(self._chips):
             self._chips[index].copy_to_clipboard()
-            if self._notification_manager and is_notification_enabled("clipboard_copy"):
-                self._notification_manager.show_success_notification("Copied")
+            flash_confirmation(self._chips[index].copy_btn)

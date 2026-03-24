@@ -311,13 +311,13 @@ class HistoryEntryWidget(QWidget):
         self._input_text_label = input_text_label
         input_row.addWidget(input_text_label)
 
-        input_copy_btn = IconButton("copy", size=16)
-        input_copy_btn.setStyleSheet(ICON_BTN_STYLE)
-        input_copy_btn.setToolTip("Copy input")
-        input_copy_btn.setEnabled(has_input)
-        input_copy_btn.setCursor(Qt.PointingHandCursor if has_input else Qt.ArrowCursor)
-        input_copy_btn.clicked.connect(self._copy_input)
-        input_row.addWidget(input_copy_btn)
+        self._input_copy_btn = IconButton("copy", size=16)
+        self._input_copy_btn.setStyleSheet(ICON_BTN_STYLE)
+        self._input_copy_btn.setToolTip("Copy input")
+        self._input_copy_btn.setEnabled(has_input)
+        self._input_copy_btn.setCursor(Qt.PointingHandCursor if has_input else Qt.ArrowCursor)
+        self._input_copy_btn.clicked.connect(self._copy_input)
+        input_row.addWidget(self._input_copy_btn)
 
         main_layout.addLayout(input_row)
 
@@ -346,13 +346,13 @@ class HistoryEntryWidget(QWidget):
         self._output_text_label = output_text_label
         output_row.addWidget(output_text_label)
 
-        output_copy_btn = IconButton("copy", size=16)
-        output_copy_btn.setStyleSheet(ICON_BTN_STYLE)
-        output_copy_btn.setToolTip("Copy output")
-        output_copy_btn.setEnabled(has_output)
-        output_copy_btn.setCursor(Qt.PointingHandCursor if has_output else Qt.ArrowCursor)
-        output_copy_btn.clicked.connect(self._copy_output)
-        output_row.addWidget(output_copy_btn)
+        self._output_copy_btn = IconButton("copy", size=16)
+        self._output_copy_btn.setStyleSheet(ICON_BTN_STYLE)
+        self._output_copy_btn.setToolTip("Copy output")
+        self._output_copy_btn.setEnabled(has_output)
+        self._output_copy_btn.setCursor(Qt.PointingHandCursor if has_output else Qt.ArrowCursor)
+        self._output_copy_btn.clicked.connect(self._copy_output)
+        output_row.addWidget(self._output_copy_btn)
 
         main_layout.addLayout(output_row)
 
@@ -395,14 +395,20 @@ class HistoryEntryWidget(QWidget):
         return self.entry.output_content if self.entry.output_content else None
 
     def _copy_input(self):
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
         full_content = self._get_full_input_content()
         if full_content and self.clipboard_manager:
             self.clipboard_manager.set_content(full_content)
+            flash_confirmation(self._input_copy_btn)
 
     def _copy_output(self):
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
         full_content = self._get_full_output_content()
         if full_content and self.clipboard_manager:
             self.clipboard_manager.set_content(full_content)
+            flash_confirmation(self._output_copy_btn)
 
     def _preview_input(self):
         full_content = self._get_full_input_content()

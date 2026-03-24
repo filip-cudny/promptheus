@@ -425,7 +425,11 @@ class AssistantBubble(QWidget):
     def _copy_raw_content(self):
         from PySide6.QtWidgets import QApplication
 
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
         QApplication.clipboard().setText(self._raw_content)
+        if self.header.copy_content_btn:
+            flash_confirmation(self.header.copy_content_btn)
 
     def _toggle_render_mode(self):
         if self._rendered_mode:

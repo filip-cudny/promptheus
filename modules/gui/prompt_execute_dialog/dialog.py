@@ -51,7 +51,6 @@ from modules.gui.shared.widgets import (
     ImageChipWidget,
     create_text_edit,
 )
-from modules.utils.notification_config import is_notification_enabled
 
 _open_dialogs: dict[str, "PromptExecuteDialog"] = {}
 
@@ -487,23 +486,35 @@ class PromptExecuteDialog(BaseDialog):
 
         button_bar.addStretch()
 
-        # Send & Show button (Enter)
-        self.send_show_btn = QPushButton()
-        self.send_show_btn.setIcon(create_icon("send-horizontal", "#444444", 16))
-        self.send_show_btn.setToolTip("Send & Show Result (Enter)")
-        self.send_show_btn.clicked.connect(self._on_send_show)
-        self.send_show_btn.setEnabled(False)  # Disabled until message has content
-        button_bar.addWidget(self.send_show_btn)
-
-        # Send & Copy button (Ctrl+Enter) - default
+        # Send & Copy button (Ctrl+Enter) - secondary, left
         self.send_copy_btn = QPushButton()
         self.send_copy_btn.setIcon(create_composite_icon("delete", "copy", "#444444", 16, "&", 4))
         self.send_copy_btn.setIconSize(QSize(48, 16))
         self.send_copy_btn.setToolTip("Execute, close, get result to clipboard (Ctrl+Enter)")
         self.send_copy_btn.clicked.connect(self._on_send_copy)
-        self.send_copy_btn.setDefault(True)
-        self.send_copy_btn.setEnabled(False)  # Disabled until message has content
+        self.send_copy_btn.setEnabled(False)
+        self.send_copy_btn.setStyleSheet("""
+            QPushButton { background-color: #333333; border: 1px solid #4a4a4a; }
+            QPushButton:hover { background-color: #3a3a3a; }
+            QPushButton:pressed { background-color: #444444; }
+            QPushButton:disabled { background-color: #2a2a2a; color: #444444; }
+        """)
         button_bar.addWidget(self.send_copy_btn)
+
+        # Send & Show button (Enter) - primary CTA, right
+        self.send_show_btn = QPushButton()
+        self.send_show_btn.setIcon(create_icon("send-horizontal", "#444444", 18))
+        self.send_show_btn.setToolTip("Send & Show Result (Enter)")
+        self.send_show_btn.clicked.connect(self._on_send_show)
+        self.send_show_btn.setDefault(True)
+        self.send_show_btn.setEnabled(False)
+        self.send_show_btn.setStyleSheet("""
+            QPushButton { background-color: #464646; border: 1px solid #5a5a5a; padding: 6px 20px; }
+            QPushButton:hover { background-color: #525252; }
+            QPushButton:pressed { background-color: #5a5a5a; }
+            QPushButton:disabled { background-color: #2a2a2a; color: #444444; }
+        """)
+        button_bar.addWidget(self.send_show_btn)
 
         layout.addWidget(button_widget)
 
@@ -580,9 +591,10 @@ class PromptExecuteDialog(BaseDialog):
         if text_content:
             self.context_manager.append_context(text_content)
 
-        # Show success notification
-        if self.notification_manager and is_notification_enabled("context_saved"):
-            self.notification_manager.show_success_notification("Context Saved")
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
+        if self.context_header.save_btn:
+            flash_confirmation(self.context_header.save_btn)
 
     def _rebuild_image_chips(self):
         """Rebuild image chips from current state."""
@@ -624,8 +636,11 @@ class PromptExecuteDialog(BaseDialog):
 
     def _on_image_copy(self, index: int):
         """Handle image chip copy request."""
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
         if 0 <= index < len(self._image_chips):
             self._image_chips[index].copy_to_clipboard()
+            flash_confirmation(self._image_chips[index].copy_btn)
 
     def _paste_image_from_clipboard(self) -> bool:
         """Paste image from clipboard to context. Returns True if image was pasted."""
@@ -685,8 +700,11 @@ class PromptExecuteDialog(BaseDialog):
 
     def _on_message_image_copy(self, index: int):
         """Handle message image chip copy request."""
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
         if 0 <= index < len(self._message_image_chips):
             self._message_image_chips[index].copy_to_clipboard()
+            flash_confirmation(self._message_image_chips[index].copy_btn)
 
     def _paste_image_to_message(self) -> bool:
         """Paste image from clipboard to message. Returns True if image was pasted."""
@@ -1257,11 +1275,11 @@ class PromptExecuteDialog(BaseDialog):
         if stop_active != "alt":
             if is_regenerate:
                 icon_color = "#f0f0f0" if can_act else "#444444"
-                self.send_show_btn.setIcon(create_icon("refresh-cw", icon_color, 16))
+                self.send_show_btn.setIcon(create_icon("refresh-cw", icon_color, 18))
                 self.send_show_btn.setToolTip("Regenerate (Enter)")
             else:
                 icon_color = "#f0f0f0" if can_act else "#444444"
-                self.send_show_btn.setIcon(create_icon("send-horizontal", icon_color, 16))
+                self.send_show_btn.setIcon(create_icon("send-horizontal", icon_color, 18))
                 self.send_show_btn.setToolTip("Send & Show Result (Enter)")
 
         # Only update send_copy_btn icon if not in stop mode

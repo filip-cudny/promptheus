@@ -155,13 +155,15 @@ class TextPreviewDialog(BaseDialog):
 
     def _copy_all(self):
         """Copy all text content to clipboard."""
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
         text = self.text_edit.toPlainText()
         if text:
             if self._clipboard_manager:
-                # Use xclip/xsel to avoid X11 clipboard ownership issues
                 self._clipboard_manager.set_content(text)
             else:
                 QApplication.clipboard().setText(text)
+            flash_confirmation(self.copy_btn)
 
     def keyPressEvent(self, event):
         """Handle key press events."""

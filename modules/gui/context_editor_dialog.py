@@ -338,8 +338,10 @@ class ContextEditorDialog(BaseDialog):
         if text_content:
             self.context_manager.append_context(text_content)
 
-        if self.notification_manager and is_notification_enabled("context_saved"):
-            self.notification_manager.show_success_notification("Context saved")
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
+        if self.context_header.save_btn:
+            flash_confirmation(self.context_header.save_btn)
 
     def _save_clipboard_only(self):
         """Save only the clipboard changes."""
@@ -352,8 +354,10 @@ class ContextEditorDialog(BaseDialog):
             clipboard_content = self.clipboard_edit.toPlainText()
             self.clipboard_manager.set_content(clipboard_content)
 
-        if self.notification_manager and is_notification_enabled("clipboard_copy"):
-            self.notification_manager.show_success_notification("Clipboard saved")
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
+        if self.clipboard_header.save_btn:
+            flash_confirmation(self.clipboard_header.save_btn)
 
     def _load_context(self):
         """Load current context and clipboard into the dialog."""
@@ -486,10 +490,11 @@ class ContextEditorDialog(BaseDialog):
 
     def _on_clipboard_image_copy(self, index: int):
         """Handle clipboard image copy request."""
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
         if self._clipboard_image_chip:
             self._clipboard_image_chip.copy_to_clipboard()
-            if self.notification_manager and is_notification_enabled("clipboard_copy"):
-                self.notification_manager.show_success_notification("Copied")
+            flash_confirmation(self._clipboard_image_chip.copy_btn)
 
     # --- Context state management ---
 
@@ -669,10 +674,11 @@ class ContextEditorDialog(BaseDialog):
 
     def _on_image_copy(self, index: int):
         """Handle image chip copy request."""
+        from modules.gui.shared.icon_confirmation import flash_confirmation
+
         if 0 <= index < len(self._image_chips):
             self._image_chips[index].copy_to_clipboard()
-            if self.notification_manager and is_notification_enabled("clipboard_copy"):
-                self.notification_manager.show_success_notification("Copied")
+            flash_confirmation(self._image_chips[index].copy_btn)
 
     def _paste_image_from_clipboard(self) -> bool:
         """Paste image from clipboard. Returns True if image was pasted."""

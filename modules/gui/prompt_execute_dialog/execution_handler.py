@@ -790,7 +790,7 @@ class ExecutionHandler:
         dialog = self.dialog
 
         if is_alt_enter:
-            dialog.send_show_btn.setIcon(create_icon("square", "#f0f0f0", 16))
+            dialog.send_show_btn.setIcon(create_icon("square", "#f0f0f0", 18))
             dialog.send_show_btn.setToolTip("Stop execution (Enter)")
             with contextlib.suppress(TypeError):
                 dialog.send_show_btn.clicked.disconnect()
@@ -824,7 +824,7 @@ class ExecutionHandler:
                 with contextlib.suppress(TypeError):
                     dialog.send_show_btn.clicked.disconnect()
                 dialog.send_show_btn.clicked.connect(dialog._on_send_show)
-                dialog.send_show_btn.setIcon(create_icon("send-horizontal", "#444444", 16))
+                dialog.send_show_btn.setIcon(create_icon("send-horizontal", "#444444", 18))
                 dialog.send_show_btn.setToolTip("Send & Show Result (Enter)")
             elif self._stop_button_active == "ctrl":
                 with contextlib.suppress(TypeError):
