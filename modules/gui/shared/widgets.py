@@ -564,7 +564,8 @@ def create_text_edit(
         Configured QTextEdit widget
     """
     text_edit = QTextEdit()
-    text_edit.setFont(QFont("Menlo, Monaco, Consolas, monospace", font_size))
+    bubble_font = QFont("sans-serif", font_size) if is_bubble else QFont("Menlo, Monaco, Consolas, monospace", font_size)
+    text_edit.setFont(bubble_font)
     text_edit.setLineWrapMode(QTextEdit.WidgetWidth)
     text_edit.setAcceptRichText(False)
     if min_height > 0:
@@ -608,7 +609,7 @@ def create_markdown_browser(min_height: int = BUBBLE_TEXT_EDIT_MIN_HEIGHT):
     )
 
     browser = QTextBrowser()
-    browser.setFont(QFont("sans-serif", 15))
+    browser.setFont(QFont("sans-serif", 12))
     browser.setOpenLinks(False)
     browser.setOpenExternalLinks(False)
     browser.setReadOnly(True)

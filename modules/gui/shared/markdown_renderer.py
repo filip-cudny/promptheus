@@ -46,9 +46,6 @@ _CSS = f"""
 body {{
     background-color: {COLOR_BUBBLE_TEXT_EDIT_BG};
     color: {COLOR_TEXT};
-    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    font-size: 16px;
-    line-height: 1.3;
     margin: 0;
     padding: 4px 0;
 }}
@@ -62,7 +59,8 @@ h2 {{ font-size: 16px; }}
 h3 {{ font-size: 14px; }}
 h4, h5, h6 {{ font-size: 13px; }}
 p {{
-    margin: 4px 0;
+    margin-top: 0;
+    margin-bottom: 1em;
 }}
 ul, ol {{
     margin: 6px 0;
@@ -204,6 +202,9 @@ class _DarkHTMLRenderer(HTMLRenderer):
         self.code_blocks: list[str] = []
         self.highlight_code = highlight_code
         self._confirmed_copy_index = confirmed_copy_index
+
+    def softbreak(self) -> str:
+        return "<br>\n"
 
     def block_code(self, text: str, **attrs: Any) -> str:
         raw_code = text.rstrip("\n")
