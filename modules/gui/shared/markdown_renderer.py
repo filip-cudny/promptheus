@@ -54,10 +54,10 @@ h1, h2, h3, h4, h5, h6 {{
     margin: 12px 0 6px 0;
     font-weight: 600;
 }}
-h1 {{ font-size: 18px; }}
-h2 {{ font-size: 16px; }}
-h3 {{ font-size: 14px; }}
-h4, h5, h6 {{ font-size: 13px; }}
+h1 {{ font-size: 1.3em; }}
+h2 {{ font-size: 1.15em; }}
+h3 {{ font-size: 1.0em; }}
+h4, h5, h6 {{ font-size: 0.95em; }}
 p {{
     margin-top: 0;
     margin-bottom: 1em;
@@ -82,7 +82,7 @@ code {{
     padding: 1px 4px;
     border-radius: 3px;
     font-family: "Menlo", "Monaco", "Consolas", monospace;
-    font-size: 12px;
+    font-size: 0.85em;
 }}
 a.copy-link, a.copy-link:visited, a.copy-link:active, a.copy-link:focus {{
     color: {COLOR_TEXT_HINT};
@@ -104,7 +104,7 @@ table.code-wrapper {{
 td.code-body {{
     padding: 10px 14px;
     font-family: "Menlo", "Monaco", "Consolas", monospace;
-    font-size: 14px;
+    font-size: 0.85em;
     line-height: 1.4;
     color: {COLOR_TEXT};
     white-space: pre;
@@ -116,7 +116,7 @@ table.code-toolbar {{
 }}
 td.lang-label {{
     color: {COLOR_TEXT_SECONDARY};
-    font-size: 14px;
+    font-size: 0.85em;
     font-family: "Menlo", "Monaco", "Consolas", monospace;
     padding: 0;
 }}
