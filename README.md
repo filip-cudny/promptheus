@@ -1,3 +1,8 @@
+> [!WARNING]
+   > **This repository is deprecated and no longer maintained.**
+   > Development has moved to [filip-cudny/promptheus2](https://github.com/filip-cudny/promptheus2).
+   > Please use the new repository for issues, PRs, and the latest version.
+
 # Promptheus
 
 A powerful context menu application that provides instant access to AI prompts from anywhere in your system. Execute common tasks like text summarization, translation, and custom prompts using clipboard content or speech-to-text input.
