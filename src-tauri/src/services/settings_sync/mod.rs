@@ -1,3 +1,6 @@
+mod connect;
+#[cfg(test)]
+mod connect_tests;
 mod detect;
 mod git;
 mod reload;
@@ -23,6 +26,7 @@ use crate::services::notification::{NotificationLevel, NotificationService};
 use crate::services::skill::SkillService;
 use crate::services::sqlite_history::SqliteHistoryService;
 
+pub use connect::{ConnectRequest, PrepareSource, Prepared};
 pub use detect::{detect, Detection, SyncRepo};
 pub use git::{GitError, GitRunner};
 pub use reload::{reload_changed, reload_if_changed, Reloaded};
@@ -205,11 +209,7 @@ impl SettingsSync {
         hooks: &H,
         previous: &SyncStatus,
     ) -> (SyncStatus, Vec<PathBuf>) {
-        let provider = self.env_provider.clone();
-        let env = tokio::task::spawn_blocking(move || provider())
-            .await
-            .unwrap_or_default();
-        let runner = GitRunner::new(env, self.timeout);
+        let runner = self.runner(self.timeout).await;
 
         let repo = match detect(&runner, &self.config_dir).await {
             Detection::Off => {
@@ -399,12 +399,16 @@ impl SettingsSync {
             .collect())
     }
 
-    pub async fn host(&self) -> String {
+    async fn runner(&self, timeout: Duration) -> GitRunner {
         let provider = self.env_provider.clone();
         let env = tokio::task::spawn_blocking(move || provider())
             .await
             .unwrap_or_default();
-        self.host_name(&GitRunner::new(env, self.timeout)).await
+        GitRunner::new(env, timeout)
+    }
+
+    pub async fn host(&self) -> String {
+        self.host_name(&self.runner(self.timeout).await).await
     }
 
     async fn host_name(&self, runner: &GitRunner) -> String {
@@ -516,6 +520,18 @@ pub async fn run_sync(app: &AppHandle, trigger: Trigger) -> SyncResult {
     if let SyncResult::Completed(report) = &result {
         notify_state_entered(app, report).await;
     }
+    result
+}
+
+pub async fn connect_app(app: &AppHandle, request: &ConnectRequest) -> Result<(), String> {
+    let engine = app.state::<Arc<SettingsSync>>().inner().clone();
+    let hooks = AppHooks {
+        app: app.clone(),
+        reloaded: Mutex::new(Reloaded::default()),
+    };
+    let result = engine.connect(request, &hooks).await;
+    let reloaded = *hooks.reloaded.lock().unwrap();
+    apply_reloaded(app, reloaded).await;
     result
 }
 

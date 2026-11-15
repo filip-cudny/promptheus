@@ -165,6 +165,9 @@ macro_rules! handlers {
             // === settings_sync ===
             $crate::commands::settings_sync::get_settings_sync_status,
             $crate::commands::settings_sync::sync_settings_now,
+            $crate::commands::settings_sync::sync_prepare,
+            $crate::commands::settings_sync::sync_connect,
+            $crate::commands::settings_sync::sync_clone_dir,
             // === settings_dialog ===
             $crate::commands::settings_dialog::open_settings_window,
             $crate::commands::settings_dialog::save_secret,
