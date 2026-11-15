@@ -7,6 +7,7 @@ Top-level index of the documentation files in the project. Updated incrementally
 - [README.md](README.md) — landing, quick start, configuration, development commands
 - [src/DOCS.md](src/DOCS.md) — Svelte frontend: layout and conventions
 - [src-tauri/DOCS.md](src-tauri/DOCS.md) — Rust backend: layout and conventions
+- [scripts/screenshots/DOCS.md](scripts/screenshots/DOCS.md) — Screenshot generator: run, fixtures, adding a view
 - [src-tauri/src/models/DOCS.md](src-tauri/src/models/DOCS.md) — Data structures: derive standard, stable `settings.json`, serde defaults, IPC model structs, adding settings fields, skill `offered_in`
 - [src-tauri/src/services/DOCS.md](src-tauri/src/services/DOCS.md) — Service layer: service file layout and conventions
 - [src-tauri/src/services/change_log/DOCS.md](src-tauri/src/services/change_log/DOCS.md) — Change log: one immutable JSON file per settings-agent operation, entry format, pruning, sync staging

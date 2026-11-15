@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "icons": "node scripts/icons.mjs",
+    "screenshots": "node scripts/screenshots/run.mjs",
     "bundle:linux": "tauri build --bundles deb",
     "bundle:mac": "PATH=\"$PWD/scripts/bin:$PATH\" tauri build --bundles app"
   },
