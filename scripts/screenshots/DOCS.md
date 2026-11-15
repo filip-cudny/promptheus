@@ -7,6 +7,16 @@
 - `mocks.ts` installs `mockWindows` and `mockIPC` (events mocked) and answers each `invoke` from the view's fixture in `views/<view>.ts`.
 - `get_settings_catalog` is parsed from `src-tauri/src/services/config/catalog.rs` at each run (`catalog.mjs`); a line it cannot parse fails the run.
 
+## Views
+
+- `settings`: Models section with the settings agent panel widened after one invented exchange.
+- `context-menu`: the context menu with four prompts, last interaction and context, clipped to the menu.
+- `conversation`: the chat window with a two-turn conversation restored from history, the last answer holding a highlighted code block.
+- `palette`: the command palette after `palette:show` with two providers and three tabs, clipped to the palette.
+- `history`: the history window with results for the query `search`, typed into its search field.
+- `setup`: the settings window with the first-run setup banner on step 4 (shortcuts), steps 1-3 done.
+- `recording-pill`: the WebKit recording pill while recording, on a mid-grey backdrop.
+
 ## Failures
 
 The run exits non-zero, naming the view and the cause, on:
@@ -18,8 +28,8 @@ The run exits non-zero, naming the view and the cause, on:
 
 ## Adding a view
 
-1. `views/<view>.ts` exports `label` (the Tauri window label), `fixture` (command → value, or function of the invoke args), optionally `globals` (window properties the backend injects) and `show()` (emits the show event of an event-driven window through `@tauri-apps/api/event`).
-2. Register it in `VIEWS` of `mocks.ts` and of `run.mjs` (HTML page, window size in CSS pixels, `clip` selector for a transparent window).
+1. `views/<view>.ts` exports `label` (the Tauri window label), `fixture` (command → value, or function of the invoke args), optionally `globals` (window properties the backend injects) and `show()` (emits the show or state events of an event-driven window through `@tauri-apps/api/event`, or waits for a transient state such as a highlight to end).
+2. Register it in `VIEWS` of `mocks.ts` and of `run.mjs`: HTML page, window size in CSS pixels, optionally `clip` (selector of a transparent window's visible part), `type` (text typed into the focused field after `show()`), `backdrop` (page background behind a transparent window) with `margin` (CSS pixels of backdrop around the window).
 3. Run `pnpm screenshots <view>` until it exits 0, and look at the PNG.
 
 Fixtures hold invented data only: no real names, keys, paths, prompts, skills or model ids, nothing copied from a config directory.

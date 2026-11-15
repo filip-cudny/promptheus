@@ -18,6 +18,17 @@ const settleTimeoutMs = 15000;
 const VIEWS = {
   settings: { page: "settings-dialog.html", width: 1340, height: 640 },
   "context-menu": { page: "context-menu.html", width: 320, height: 400, clip: ".menu-shell" },
+  conversation: { page: "conversation-dialog.html", width: 700, height: 600 },
+  palette: { page: "palette.html", width: 520, height: 400, clip: ".palette-modal" },
+  history: { page: "history-dialog.html", width: 600, height: 500, type: "search" },
+  setup: { page: "settings-dialog.html", width: 960, height: 640 },
+  "recording-pill": {
+    page: "recording-widget.html",
+    width: 264,
+    height: 72,
+    backdrop: "rgb(128, 128, 128)",
+    margin: 12,
+  },
 };
 
 function chromePath() {
@@ -189,6 +200,12 @@ function clipExpression(selector) {
   })()`;
 }
 
+function backdropExpression(view, margin) {
+  const body = { boxSizing: "content-box", width: `${view.width}px`, height: `${view.height}px`, padding: `${margin}px` };
+  return `document.documentElement.style.background = ${JSON.stringify(view.backdrop)};
+    Object.assign(document.body.style, ${JSON.stringify(body)});`;
+}
+
 async function loadPage(cdp, sessionId, url) {
   const loaded = new Promise((resolve) => cdp.on(sessionId, "Page.loadEventFired", resolve));
   const { errorText } = await cdp.send("Page.navigate", { url }, sessionId);
@@ -199,16 +216,19 @@ async function loadPage(cdp, sessionId, url) {
 async function captureView(cdp, sessionId, url, name) {
   const view = VIEWS[name];
   for (const domain of ["Page", "Runtime", "Log", "Network"]) await cdp.send(`${domain}.enable`, {}, sessionId);
+  const margin = view.margin ?? 0;
   await cdp.send(
     "Emulation.setDeviceMetricsOverride",
-    { width: view.width, height: view.height, deviceScaleFactor: 2, mobile: false },
+    { width: view.width + 2 * margin, height: view.height + 2 * margin, deviceScaleFactor: 2, mobile: false },
     sessionId,
   );
   if (view.clip) {
     await cdp.send("Emulation.setDefaultBackgroundColorOverride", { color: { r: 0, g: 0, b: 0, a: 0 } }, sessionId);
   }
   await loadPage(cdp, sessionId, url);
+  if (view.backdrop) await evaluate(cdp, sessionId, backdropExpression(view, margin));
   await evaluate(cdp, sessionId, "window.__screenshot.show?.()");
+  if (view.type) await cdp.send("Input.insertText", { text: view.type }, sessionId);
   await evaluate(cdp, sessionId, settleExpression);
   const envKeys = await evaluate(cdp, sessionId, "window.__screenshot.envKeys");
   console.log(`${name}: import.meta.env keys ${envKeys.join(", ")}`);

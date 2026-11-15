@@ -1,6 +1,11 @@
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import * as settings from "./views/settings";
 import * as contextMenu from "./views/context-menu";
+import * as conversation from "./views/conversation";
+import * as palette from "./views/palette";
+import * as history from "./views/history";
+import * as setup from "./views/setup";
+import * as recordingPill from "./views/recording-pill";
 
 export type Fixture = Record<string, unknown | ((args: Record<string, unknown>) => unknown)>;
 
@@ -11,7 +16,15 @@ interface View {
   show?: () => Promise<void>;
 }
 
-const VIEWS: Record<string, View> = { settings, "context-menu": contextMenu };
+const VIEWS: Record<string, View> = {
+  settings,
+  "context-menu": contextMenu,
+  conversation,
+  palette,
+  history,
+  setup,
+  "recording-pill": recordingPill,
+};
 
 const name = new URLSearchParams(location.search).get("view") ?? "";
 const view = VIEWS[name];
