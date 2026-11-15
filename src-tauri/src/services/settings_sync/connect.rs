@@ -290,6 +290,10 @@ fn copy_path(from: &Path, to: &Path) -> io::Result<()> {
     Ok(())
 }
 
+// Simplification: a local entry that is a symlink to somewhere else moves as the link, not as its
+// content, so a relative link target breaks after the move. Stops being correct when a config
+// entry (`settings.json`, `prompts`, `skills`) is a relative symlink outside the repository
+// before connecting. Upgrade path: resolve the link in `link_entry` and move the content.
 fn move_path(from: &Path, to: &Path) -> Result<(), String> {
     let moved = (|| {
         if let Some(parent) = to.parent() {
@@ -349,11 +353,15 @@ fn link_entry(
 fn move_change_log(config_dir: &Path, folder_dir: &Path) -> Result<(), String> {
     let source = config_dir.join(CHANGE_LOG_DIR_NAME);
     let destination = folder_dir.join(CHANGE_LOG_DIR_NAME);
-    let Ok(read) = fs::read_dir(&source) else {
-        return Ok(());
+    let read = match fs::read_dir(&source) {
+        Ok(read) => read,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(format!("failed to read {}: {e}", source.display())),
     };
     let mut moved = 0;
-    for entry in read.flatten() {
+    for entry in read {
+        let entry =
+            entry.map_err(|e| format!("failed to read an entry of {}: {e}", source.display()))?;
         let from = entry.path();
         let to = destination.join(entry.file_name());
         if !from.is_file() || exists_or_link(&to) {
