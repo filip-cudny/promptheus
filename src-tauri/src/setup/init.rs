@@ -1,5 +1,6 @@
 use tauri::Manager;
 
+use crate::commands::settings_dialog::open_settings_window;
 use crate::services::{self, config::ConfigService};
 use crate::setup;
 
@@ -45,7 +46,16 @@ pub fn run(app: &mut tauri::App) -> std::result::Result<(), Box<dyn std::error::
 
     setup::windows::create(app)?;
     setup::shortcuts::register(app, config_service.settings())?;
+    let in_fallback = config_service.fallback().is_some();
     setup::state::manage(app, &config_dir, config_service)?;
+    if in_fallback {
+        let handle = app.handle().clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = open_settings_window(handle, None).await {
+                log::warn!("failed to open the settings window for the settings.json error: {e}");
+            }
+        });
+    }
     setup::background::spawn_heartbeat(app.handle().clone());
     setup::background::spawn_ai_webview_unload(app.handle().clone());
     setup::background::spawn_audio_clip_sweeper(app.handle().clone());

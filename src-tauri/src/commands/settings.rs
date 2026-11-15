@@ -12,7 +12,7 @@ use crate::commands::skills::{emit_changed as emit_skills_changed, rescan_and_pr
 use crate::services::ai::AiService;
 use crate::services::change_log;
 use crate::services::config::catalog::{CatalogEntry, ENTRIES};
-use crate::services::config::{ConfigError, ConfigService, SurfaceKind};
+use crate::services::config::{ConfigError, ConfigService, SettingsFallback, SurfaceKind};
 use crate::services::history_events::emit_history_changed;
 use crate::services::missing_env::{collect_missing_enabled, env_is_set, MissingEnvRef};
 use crate::services::settings_agent::transcript;
@@ -141,6 +141,35 @@ pub async fn get_missing_env_refs(
 ) -> crate::Result<Vec<MissingEnvRef>> {
     let settings = config.lock().await.settings().clone();
     Ok(collect_missing_enabled(&settings, env_is_set))
+}
+
+#[tauri::command]
+pub async fn get_settings_fallback(
+    config: State<'_, Arc<Mutex<ConfigService>>>,
+) -> crate::Result<Option<SettingsFallback>> {
+    Ok(config.lock().await.fallback().cloned())
+}
+
+#[tauri::command]
+pub async fn retry_settings_load(
+    app: AppHandle,
+    config: State<'_, Arc<Mutex<ConfigService>>>,
+) -> crate::Result<Option<SettingsFallback>> {
+    let reloaded = config.lock().await.reload();
+    match reloaded {
+        Ok(()) => {
+            log::info!("settings.json reloaded on retry");
+            apply_settings_reload(&app, "retry").await?;
+            Ok(None)
+        }
+        Err(e) => match config.lock().await.fallback().cloned() {
+            Some(fallback) => {
+                log::warn!("settings retry failed: {}", fallback.error);
+                Ok(Some(fallback))
+            }
+            None => Err(e.into()),
+        },
+    }
 }
 
 #[tauri::command]

@@ -73,12 +73,20 @@ pub enum SurfaceKind {
 }
 
 const MAX_PREFERRED_NAME_LEN: usize = 60;
+const LAST_GOOD_FILE: &str = "settings.last-good.json";
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SettingsFallback {
+    pub path: String,
+    pub error: String,
+}
 
 #[derive(Debug, Clone)]
 pub struct ConfigService {
     settings: Settings,
     config_dir: PathBuf,
     baseline: Vec<u8>,
+    fallback: Option<SettingsFallback>,
 }
 
 #[derive(Debug)]
@@ -93,6 +101,7 @@ impl ConfigService {
             settings,
             config_dir: config_dir.to_path_buf(),
             baseline: Vec::new(),
+            fallback: None,
         }
     }
 
@@ -104,18 +113,42 @@ impl ConfigService {
             initialize_defaults(config_dir)?;
         }
 
-        let content = std::fs::read_to_string(&settings_path)?;
-        let settings = build_settings(config_dir, &content)?;
+        let built = std::fs::read_to_string(&settings_path)
+            .map_err(ConfigError::from)
+            .and_then(|content| build_settings(config_dir, &content));
+        match built {
+            Ok(settings) => {
+                let mut service = ConfigService::detached(settings, config_dir);
+                service.write()?;
+                Ok(service)
+            }
+            Err(error) => Self::load_last_good(config_dir, &settings_path, error),
+        }
+    }
 
-        let mut service = ConfigService {
-            settings,
-            config_dir: config_dir.to_path_buf(),
-            baseline: Vec::new(),
+    fn load_last_good(
+        config_dir: &Path,
+        settings_path: &Path,
+        error: ConfigError,
+    ) -> Result<Self, ConfigError> {
+        let last_good = std::fs::read_to_string(config_dir.join(LAST_GOOD_FILE))
+            .map_err(ConfigError::from)
+            .and_then(|content| build_settings(config_dir, &content));
+        let Ok(settings) = last_good else {
+            return Err(error);
         };
-
-        service.write()?;
-
+        let path = settings_path.display().to_string();
+        log::warn!("{path} could not be built, starting on {LAST_GOOD_FILE}: {error}");
+        let mut service = ConfigService::detached(settings, config_dir);
+        service.fallback = Some(SettingsFallback { path, error: error.to_string() });
         Ok(service)
+    }
+
+    fn write_last_good(&self, bytes: &[u8]) {
+        let path = self.config_dir.join(LAST_GOOD_FILE);
+        if let Err(e) = write_atomic(&path, bytes) {
+            log::warn!("failed to write {}: {e}", path.display());
+        }
     }
 
     #[cfg(test)]
@@ -130,13 +163,14 @@ impl ConfigService {
         let json = serde_json::to_string_pretty(&self.settings)?;
         let settings_path = self.config_dir.join("settings.json");
         std::fs::write(&settings_path, &json)?;
+        self.write_last_good(json.as_bytes());
         self.baseline = json.into_bytes();
         Ok(())
     }
 
     pub fn reload_if_changed(&mut self) -> Result<bool, ConfigError> {
         let settings_path = self.config_dir.join("settings.json");
-        if std::fs::read(&settings_path)? == self.baseline {
+        if self.fallback.is_none() && std::fs::read(&settings_path)? == self.baseline {
             return Ok(false);
         }
         self.reload()?;
@@ -182,6 +216,25 @@ impl ConfigService {
     }
 
     pub fn reload(&mut self) -> Result<(), ConfigError> {
+        match self.read_and_build() {
+            Ok((settings, bytes)) => {
+                self.settings = settings;
+                self.write_last_good(&bytes);
+                self.baseline = bytes;
+                self.fallback = None;
+                log::debug!("settings reloaded");
+                Ok(())
+            }
+            Err(error) => {
+                if let Some(fallback) = &mut self.fallback {
+                    fallback.error = error.to_string();
+                }
+                Err(error)
+            }
+        }
+    }
+
+    fn read_and_build(&self) -> Result<(Settings, Vec<u8>), ConfigError> {
         let settings_path = self.config_dir.join("settings.json");
         if !settings_path.exists() {
             return Err(ConfigError::FileNotFound(
@@ -192,11 +245,12 @@ impl ConfigService {
         let bytes = std::fs::read(&settings_path)?;
         let content = std::str::from_utf8(&bytes)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        self.settings = build_settings(&self.config_dir, content)?;
-        self.baseline = bytes;
-        log::debug!("settings reloaded");
+        let settings = build_settings(&self.config_dir, content)?;
+        Ok((settings, bytes))
+    }
 
-        Ok(())
+    pub fn fallback(&self) -> Option<&SettingsFallback> {
+        self.fallback.as_ref()
     }
 
     pub fn settings(&self) -> &Settings {

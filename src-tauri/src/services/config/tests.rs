@@ -1518,3 +1518,69 @@ fn check_settings_document_creates_no_file() {
     check_settings_document(default_json).unwrap();
     assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
 }
+
+const LAST_GOOD_NAME: &str = "Last Good";
+
+fn broken_settings_with_last_good_copy() -> (TempDir, String) {
+    let dir = setup_test_dir();
+    let mut service = ConfigService::load(dir.path()).expect("load");
+    service
+        .try_mutate(|c| c.update_setting("preferred_name", serde_json::json!(LAST_GOOD_NAME)))
+        .expect("mutate");
+    let valid = fs::read_to_string(dir.path().join("settings.json")).unwrap();
+    let broken = format!("<<<<<<< HEAD\n{valid}");
+    fs::write(dir.path().join("settings.json"), &broken).unwrap();
+    (dir, broken)
+}
+
+#[test]
+fn load_writes_last_good_copy_equal_to_settings_json() {
+    let dir = setup_test_dir();
+    ConfigService::load(dir.path()).expect("load");
+
+    assert_eq!(
+        fs::read(dir.path().join("settings.last-good.json")).unwrap(),
+        fs::read(dir.path().join("settings.json")).unwrap()
+    );
+}
+
+#[test]
+fn load_with_broken_settings_starts_on_last_good_copy_and_refuses_writes() {
+    let (dir, broken) = broken_settings_with_last_good_copy();
+
+    let mut service = ConfigService::load(dir.path()).expect("fallback load");
+
+    assert_eq!(service.settings().preferred_name, LAST_GOOD_NAME);
+    assert_eq!(fs::read_to_string(dir.path().join("settings.json")).unwrap(), broken);
+    let fallback = service.fallback().expect("fallback set");
+    assert_eq!(fallback.path, dir.path().join("settings.json").display().to_string());
+    assert!(fallback.error.contains("JSON parse error"), "{}", fallback.error);
+
+    let write = service.try_mutate(|c| c.update_setting("theme", serde_json::json!("dark")));
+    assert!(write.is_err());
+    assert_eq!(fs::read_to_string(dir.path().join("settings.json")).unwrap(), broken);
+}
+
+#[test]
+fn reload_after_fixing_settings_json_clears_the_fallback() {
+    let (dir, broken) = broken_settings_with_last_good_copy();
+    let mut service = ConfigService::load(dir.path()).expect("fallback load");
+    let valid = broken.strip_prefix("<<<<<<< HEAD\n").unwrap();
+
+    assert!(service.reload().is_err());
+    assert!(service.fallback().is_some());
+
+    fs::write(dir.path().join("settings.json"), valid).unwrap();
+    service.reload().expect("reload");
+
+    assert!(service.fallback().is_none());
+    assert_eq!(service.settings().preferred_name, LAST_GOOD_NAME);
+}
+
+#[test]
+fn load_with_broken_settings_and_no_last_good_copy_fails() {
+    let dir = setup_test_dir();
+    fs::write(dir.path().join("settings.json"), "<<<<<<< HEAD\n{}").unwrap();
+
+    assert!(ConfigService::load(dir.path()).is_err());
+}

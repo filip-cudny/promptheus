@@ -45,6 +45,19 @@ export async function getSettings(): Promise<Settings> {
   return invoke("get_settings");
 }
 
+export interface SettingsFallback {
+  path: string;
+  error: string;
+}
+
+export async function getSettingsFallback(): Promise<SettingsFallback | null> {
+  return invoke("get_settings_fallback");
+}
+
+export async function retrySettingsLoad(): Promise<SettingsFallback | null> {
+  return invoke("retry_settings_load");
+}
+
 export async function getSettingsCatalog(): Promise<CatalogEntry[]> {
   return invoke("get_settings_catalog");
 }

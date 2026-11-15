@@ -10,6 +10,7 @@
   import { getSettingsNavigation } from "$lib/stores/settingsNavigation.svelte";
   import SettingsContent from "$lib/components/features/settings/SettingsContent.svelte";
   import MissingEnvList from "$lib/components/features/settings/MissingEnvList.svelte";
+  import SettingsFallbackError from "$lib/components/features/settings/SettingsFallbackError.svelte";
   import AgentPanel from "$lib/components/features/settings/agent/AgentPanel.svelte";
   import { getSettingsAgent } from "$lib/stores/settingsAgent.svelte";
   import SettingsErrorToast from "$lib/components/features/settings/SettingsErrorToast.svelte";
@@ -67,6 +68,7 @@
 </script>
 
 <div class="dialog-shell">
+  <SettingsFallbackError />
   <MissingEnvList />
   <div
     class="dialog-body"
