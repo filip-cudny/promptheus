@@ -57,7 +57,7 @@ async function startServer(catalog, envDir) {
     cacheDir: join(root, "node_modules", ".vite-screenshots"),
     plugins: [svelte(), mocksPlugin(catalog)],
     resolve: { alias: { $lib: join(root, "src", "lib") } },
-    server: { host: "127.0.0.1", port: 0, strictPort: false },
+    server: { host: "127.0.0.1", port: 0 },
     logLevel: "error",
   });
   await server.listen();
@@ -196,36 +196,42 @@ async function loadPage(cdp, sessionId, url) {
   await loaded;
 }
 
-async function renderView(cdp, baseUrl, name) {
+async function captureView(cdp, sessionId, url, name) {
   const view = VIEWS[name];
+  for (const domain of ["Page", "Runtime", "Log", "Network"]) await cdp.send(`${domain}.enable`, {}, sessionId);
+  await cdp.send(
+    "Emulation.setDeviceMetricsOverride",
+    { width: view.width, height: view.height, deviceScaleFactor: 2, mobile: false },
+    sessionId,
+  );
+  if (view.clip) {
+    await cdp.send("Emulation.setDefaultBackgroundColorOverride", { color: { r: 0, g: 0, b: 0, a: 0 } }, sessionId);
+  }
+  await loadPage(cdp, sessionId, url);
+  await evaluate(cdp, sessionId, "window.__screenshot.show?.()");
+  await evaluate(cdp, sessionId, settleExpression);
+  const envKeys = await evaluate(cdp, sessionId, "window.__screenshot.envKeys");
+  console.log(`${name}: import.meta.env keys ${envKeys.join(", ")}`);
+  const extraKeys = envKeys.filter((key) => !builtinEnvKeys.includes(key));
+  if (extraKeys.length) throw new Error(`import.meta.env holds ${extraKeys.join(", ")}`);
+  const clip = view.clip ? await evaluate(cdp, sessionId, clipExpression(view.clip)) : undefined;
+  if (view.clip && !clip) throw new Error(`no element matches ${view.clip}`);
+  const { data } = await cdp.send("Page.captureScreenshot", { format: "png", clip }, sessionId);
+  return data;
+}
+
+async function renderView(cdp, baseUrl, name) {
   const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank" });
   const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
   try {
     const failures = watchFailures(cdp, sessionId);
-    const fail = () => {
-      if (failures.length) throw new Error(`${name}: ${failures.join("; ")}`);
-    };
-    for (const domain of ["Page", "Runtime", "Log", "Network"]) await cdp.send(`${domain}.enable`, {}, sessionId);
-    await cdp.send(
-      "Emulation.setDeviceMetricsOverride",
-      { width: view.width, height: view.height, deviceScaleFactor: 2, mobile: false },
-      sessionId,
-    );
-    if (view.clip) {
-      await cdp.send("Emulation.setDefaultBackgroundColorOverride", { color: { r: 0, g: 0, b: 0, a: 0 } }, sessionId);
+    let data;
+    try {
+      data = await captureView(cdp, sessionId, `${baseUrl}/${VIEWS[name].page}?view=${name}`, name);
+    } catch (e) {
+      failures.push(e.message.split("\n")[0]);
     }
-    await loadPage(cdp, sessionId, `${baseUrl}/${view.page}?view=${name}`);
-    await evaluate(cdp, sessionId, "window.__screenshot.show?.()");
-    await evaluate(cdp, sessionId, settleExpression);
-    fail();
-    const envKeys = await evaluate(cdp, sessionId, "window.__screenshot.envKeys");
-    console.log(`${name}: import.meta.env keys ${envKeys.join(", ")}`);
-    const extraKeys = envKeys.filter((key) => !builtinEnvKeys.includes(key));
-    if (extraKeys.length) throw new Error(`${name}: import.meta.env holds ${extraKeys.join(", ")}`);
-    const clip = view.clip ? await evaluate(cdp, sessionId, clipExpression(view.clip)) : undefined;
-    if (view.clip && !clip) throw new Error(`${name}: no element matches ${view.clip}`);
-    const { data } = await cdp.send("Page.captureScreenshot", { format: "png", clip }, sessionId);
-    fail();
+    if (failures.length) throw new Error(`${name}: ${failures.join("; ")}`);
     const file = join(outDir, `${name}.png`);
     writeFileSync(file, Buffer.from(data, "base64"));
     console.log(`${name}: wrote ${file}`);
