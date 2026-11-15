@@ -42,8 +42,7 @@ fn test_stt_model(id: &str, api_key: &str) -> ModelConfig {
 
 fn setup_test_dir() -> TempDir {
     let dir = TempDir::new().unwrap();
-    let default_json = include_str!("../../../resources/default_settings.json");
-    fs::write(dir.path().join("settings.json"), default_json).unwrap();
+    fs::write(dir.path().join("settings.json"), include_str!("test_fixture_settings.json")).unwrap();
     dir
 }
 
@@ -201,7 +200,9 @@ fn test_first_run_creates_defaults() {
     let service = ConfigService::load(dir.path()).expect("should create defaults");
     assert!(dir.path().join("settings.json").exists());
     assert!(dir.path().join(".env").exists());
-    assert!(!service.settings().models.is_empty());
+    assert!(service.settings().models.is_empty());
+    assert_eq!(service.settings().surfaces.chat.generation.model_id, None);
+    assert_eq!(service.settings().surfaces.speech_to_text.model_id, None);
 }
 
 #[test]
@@ -209,7 +210,7 @@ fn test_first_run_env_template_created() {
     let dir = TempDir::new().unwrap();
     let _service = ConfigService::load(dir.path()).expect("should create defaults");
     let env_content = fs::read_to_string(dir.path().join(".env")).unwrap();
-    assert!(env_content.contains("OPENAI_API_KEY"));
+    assert!(env_content.is_empty());
 }
 
 #[test]

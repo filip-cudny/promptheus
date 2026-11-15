@@ -8,6 +8,7 @@ pub mod clipboard;
 pub mod env_resolve;
 pub mod missing_env;
 pub mod secrets;
+pub mod setup;
 pub mod settings_agent;
 #[cfg(test)]
 mod secrets_tests;

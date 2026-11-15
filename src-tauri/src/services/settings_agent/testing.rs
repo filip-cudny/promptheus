@@ -7,7 +7,7 @@ use crate::models::settings::{McpServerConfig, ModelConfig, Provider, Settings};
 use crate::models::skill::SkillFrontmatter;
 use crate::services::ai::AiService;
 use crate::services::change_log::TestResult;
-use crate::services::env_resolve::env_ref_names;
+use crate::services::env_resolve::{env_ref_names, resolve_env_refs};
 use crate::services::mcp::client::McpClient;
 use crate::services::missing_env::{visit_refs, visit_refs_mut};
 use crate::services::placeholder_registry::{substitute, PlaceholderContext};
@@ -298,6 +298,27 @@ async fn test_model(
             .map_err(|e| e.to_string())
     } else {
         complete_text(&ai_factory(settings), &model.id, TEXT_PROBE).await
+    }
+}
+
+pub async fn test_model_config(
+    model: &ModelConfig,
+    config_dir: &Path,
+    ai_factory: AiFactory<'_>,
+) -> TestResult {
+    let settings = Settings { models: vec![model.clone()], ..Settings::default() };
+    let start = Instant::now();
+    let outcome = test_model(model, &settings, ai_factory).await;
+    let millis = Some(start.elapsed().as_millis() as u64);
+    let resolved_key = model
+        .api_key
+        .as_deref()
+        .map(resolve_env_refs)
+        .filter(|key| !key.is_empty());
+    let redactor = Redactor::new(config_dir, &settings).with_values(resolved_key);
+    match outcome {
+        Ok(output) => TestResult { ok: true, millis, error: None, output: Some(redactor.redact(&output)) },
+        Err(error) => TestResult { ok: false, millis, error: Some(redactor.redact(&error)), output: None },
     }
 }
 

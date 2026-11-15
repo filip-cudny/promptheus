@@ -183,7 +183,7 @@ mod tests {
 
     fn make_config_service() -> ConfigService {
         let dir = tempfile::TempDir::new().unwrap();
-        let default_json = include_str!("../../resources/default_settings.json");
+        let default_json = include_str!("config/test_fixture_settings.json");
         std::fs::write(dir.path().join("settings.json"), default_json).unwrap();
         let svc = ConfigService::load(dir.path()).unwrap();
         std::mem::forget(dir);
@@ -193,7 +193,7 @@ mod tests {
     fn config_with_section_order(order: &[&str]) -> ConfigService {
         let dir = tempfile::TempDir::new().unwrap();
         let mut settings: serde_json::Value =
-            serde_json::from_str(include_str!("../../resources/default_settings.json")).unwrap();
+            serde_json::from_str(include_str!("config/test_fixture_settings.json")).unwrap();
         settings["menu_section_order"] = serde_json::json!(order);
         std::fs::write(dir.path().join("settings.json"), settings.to_string()).unwrap();
         let svc = ConfigService::load(dir.path()).unwrap();
@@ -309,6 +309,17 @@ mod tests {
         let items = fixed_state_coordinator().get_menu_items(&config);
 
         assert_eq!(serde_json::to_value(items).unwrap(), expected_full_menu());
+    }
+
+    #[test]
+    fn fresh_install_without_models_builds_menu_without_models_section() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config = ConfigService::load(dir.path()).unwrap();
+
+        let items = fixed_state_coordinator().get_menu_items(&config);
+
+        assert!(config.settings().models.is_empty());
+        assert!(items.iter().all(|i| i.id != "__models__"));
     }
 
     fn skill(name: &str, offered_in: Option<Vec<OfferedIn>>) -> SkillSummary {

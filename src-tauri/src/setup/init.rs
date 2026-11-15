@@ -1,6 +1,11 @@
+use std::sync::Arc;
+
 use tauri::Manager;
+use tokio::sync::Mutex;
 
 use crate::commands::settings_dialog::open_settings_window;
+use crate::commands::setup::SETUP_FINISHED_KEY;
+use crate::services::ui_state::UiStateService;
 use crate::services::{self, config::ConfigService};
 use crate::setup;
 
@@ -47,12 +52,18 @@ pub fn run(app: &mut tauri::App) -> std::result::Result<(), Box<dyn std::error::
     setup::windows::create(app)?;
     setup::shortcuts::register(app, config_service.settings())?;
     let in_fallback = config_service.fallback().is_some();
+    let setup_needed = services::setup::setup_needed(
+        config_service.settings(),
+        services::missing_env::env_is_set,
+    );
     setup::state::manage(app, &config_dir, config_service)?;
-    if in_fallback {
+    let setup_active = setup_needed && !setup_finished(app);
+    app.manage(services::setup::SetupSession::new(setup_active));
+    if in_fallback || setup_active {
         let handle = app.handle().clone();
         tauri::async_runtime::spawn(async move {
             if let Err(e) = open_settings_window(handle, None).await {
-                log::warn!("failed to open the settings window for the settings.json error: {e}");
+                log::warn!("failed to open the settings window at startup: {e}");
             }
         });
     }
@@ -64,4 +75,12 @@ pub fn run(app: &mut tauri::App) -> std::result::Result<(), Box<dyn std::error::
     setup::background::spawn_claude_desktop_cache_clear(app.handle().clone());
 
     Ok(())
+}
+
+fn setup_finished(app: &tauri::App) -> bool {
+    let ui_state = app.state::<Arc<Mutex<UiStateService>>>();
+    let finished = tauri::async_runtime::block_on(async {
+        ui_state.lock().await.get(SETUP_FINISHED_KEY)
+    });
+    finished == Some(serde_json::json!(true))
 }

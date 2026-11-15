@@ -13,6 +13,7 @@ import type {
 import { invalidateCapabilities } from "$lib/stores/capabilities.svelte";
 import { getSettingsStore } from "$lib/stores/settings.svelte";
 import { trackedInvoke } from "$lib/services/trackedInvoke";
+import type { RowTest as TestResult } from "$lib/services/settingsAgent";
 
 const SETTING_SUFFIX = /^([\s\S]*) \(setting: (.+)\)$/;
 
@@ -141,6 +142,10 @@ export async function setSpeechToTextModel(
 
 export async function addModel(config: ModelConfig): Promise<void> {
   return invokeWrite("add_model", { config });
+}
+
+export async function testModel(model: ModelConfig): Promise<TestResult> {
+  return invoke("test_model", { model });
 }
 
 export async function updateModel(

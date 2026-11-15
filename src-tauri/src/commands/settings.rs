@@ -64,7 +64,7 @@ pub(crate) async fn apply_settings_reload(app: &AppHandle, reason: &str) -> crat
     emit_skills_changed(app, reason)
 }
 
-async fn finish_mutation(app: &AppHandle, reloaded: bool) -> crate::Result<()> {
+pub(crate) async fn finish_mutation(app: &AppHandle, reloaded: bool) -> crate::Result<()> {
     let logo = app
         .state::<Arc<Mutex<ConfigService>>>()
         .lock()

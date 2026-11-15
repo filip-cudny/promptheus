@@ -38,10 +38,6 @@ pub(super) fn ensure_parameters(
 }
 
 pub(crate) fn validate(settings: &Settings) -> Result<(), ConfigError> {
-    if settings.models.is_empty() {
-        return Err(ConfigError::invalid("At least one model must be configured"));
-    }
-
     let mut seen_ids = std::collections::HashSet::new();
     for model in &settings.models {
         if model.id.is_empty() {
@@ -318,10 +314,10 @@ mod tests {
     }
 
     #[test]
-    fn validate_no_models_fails() {
+    fn validate_no_models_passes() {
         let mut settings = Settings::default();
         settings.models.clear();
-        assert!(validate(&settings).is_err());
+        assert!(validate(&settings).is_ok());
     }
 
     #[test]

@@ -39,7 +39,7 @@ pub(super) fn initialize_prompt_defaults(config_dir: &Path) -> Result<(), Config
 fn initialize_env(config_dir: &Path) -> Result<(), ConfigError> {
     let env_path = config_dir.join(".env");
     if !env_path.exists() {
-        std::fs::write(&env_path, "OPENAI_API_KEY=your_api_key_here\n")?;
+        std::fs::write(&env_path, "")?;
     }
     Ok(())
 }

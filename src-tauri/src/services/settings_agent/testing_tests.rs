@@ -6,7 +6,7 @@ use tempfile::TempDir;
 
 use super::operations::Operation;
 use super::plan::Plan;
-use super::testing::{run_row_test, RowTest, RowTestRequest};
+use super::testing::{run_row_test, test_model_config, RowTest, RowTestRequest};
 use crate::models::settings::{McpServerConfig, ModelConfig, ModelType, Provider, Settings};
 use crate::models::skill::SkillFrontmatter;
 use crate::services::ai::mock::{MockProvider, MockReply};
@@ -455,4 +455,40 @@ fn stt_sample_is_mono_16k_16bit_2_to_4_seconds() {
     assert_eq!((spec.channels, spec.sample_rate, spec.bits_per_sample), (1, 16000, 16));
     let seconds = reader.duration() as f64 / spec.sample_rate as f64;
     assert!((2.0..=4.0).contains(&seconds), "{seconds}");
+}
+
+#[tokio::test]
+async fn test_model_config_reports_a_provider_error() {
+    let error = AiError::ApiStatus { status: 401, message: "invalid api key".into() };
+    let expected = error.to_string();
+    let (provider, _) = MockProvider::new(vec![MockReply::Error(error)]);
+    let ai = AiService::with_provider("x", Box::new(provider));
+    let dir = TempDir::new().unwrap();
+    let result = test_model_config(&model("x", ModelType::Text), dir.path(), &|_| ai.clone()).await;
+    assert!(!result.ok);
+    assert_eq!(result.error, Some(expected));
+    assert!(result.millis.is_some());
+}
+
+#[tokio::test]
+async fn test_model_config_text_reply_is_ok() {
+    let ai = echoing_ai("x", "OK");
+    let dir = TempDir::new().unwrap();
+    let result = test_model_config(&model("x", ModelType::Text), dir.path(), &|_| ai.clone()).await;
+    assert!(result.ok);
+    assert_eq!(result.output.as_deref(), Some("OK"));
+    assert_eq!(result.error, None);
+}
+
+#[tokio::test]
+async fn test_model_config_redacts_the_resolved_key() {
+    let error = AiError::ApiStatus { status: 401, message: "bad key sk-secret-value".into() };
+    let (provider, _) = MockProvider::new(vec![MockReply::Error(error)]);
+    let ai = AiService::with_provider("x", Box::new(provider));
+    let dir = TempDir::new().unwrap();
+    let result =
+        test_model_config(&with_key("x", "sk-secret-value", None), dir.path(), &|_| ai.clone()).await;
+    let message = result.error.unwrap();
+    assert!(message.contains("[redacted]"), "{message}");
+    assert!(!message.contains("sk-secret-value"), "{message}");
 }

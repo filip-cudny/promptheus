@@ -22,6 +22,7 @@ pub mod settings;
 pub mod settings_agent;
 pub mod settings_dialog;
 pub mod settings_sync;
+pub mod setup;
 pub mod skills;
 pub mod speech;
 pub mod text_preview;
@@ -168,6 +169,11 @@ macro_rules! handlers {
             $crate::commands::settings_sync::sync_prepare,
             $crate::commands::settings_sync::sync_connect,
             $crate::commands::settings_sync::sync_clone_dir,
+            // === setup ===
+            $crate::commands::setup::get_setup_status,
+            $crate::commands::setup::finish_setup,
+            $crate::commands::setup::test_model,
+            $crate::commands::setup::assign_setup_model,
             // === settings_dialog ===
             $crate::commands::settings_dialog::open_settings_window,
             $crate::commands::settings_dialog::save_secret,

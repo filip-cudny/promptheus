@@ -1,0 +1,133 @@
+{
+  "show_tray_icon": true,
+  "launch_at_startup": false,
+  "theme": "dark",
+  "menu_section_order": [
+    "ContextMenuProvider",
+    "LastInteractionMenuProvider",
+    "prompts",
+    "SpeechMenuProvider",
+    "settings"
+  ],
+  "appearance": {
+    "logo": "color",
+    "icons": "mono"
+  },
+  "notifications": {
+    "events": {
+      "prompt_execution_success": true,
+      "prompt_execution_cancel": true,
+      "speech_recording_start": true,
+      "speech_recording_stop": true,
+      "speech_transcription_success": true,
+      "context_set": true,
+      "context_append": true,
+      "context_cleared": true
+    },
+    "recording_reminder": {
+      "enabled": true,
+      "silence_after_secs": 60,
+      "silence_window_secs": 8,
+      "max_interval_secs": 180
+    }
+  },
+  "prompt_base": {
+    "system": "prompts/base/system.md",
+    "about_you": "prompts/base/about_you.md",
+    "environment": "prompts/base/environment.md",
+    "input_format": "prompts/base/input_format.md"
+  },
+  "surfaces": {
+    "chat": {
+      "generation": {
+        "model_id": "550e8400-e29b-41d4-a716-446655440000",
+        "parameters": {},
+        "enabled_tools": []
+      }
+    },
+    "quick_actions": {
+      "generation": {
+        "model_id": "550e8400-e29b-41d4-a716-446655440000",
+        "parameters": {}
+      }
+    },
+    "title_generation": {
+      "generation": {
+        "model_id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e"
+      },
+      "prompt": "prompts/surfaces/title_generation.md"
+    },
+    "speech_to_text": {
+      "model_id": "c3d4e5f6-a7b8-4c9d-8e0f-1a2b3c4d5e6f",
+      "language": "pl",
+      "prompt": "prompts/surfaces/speech_to_text.md"
+    }
+  },
+  "models": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "type": "text",
+      "model": "gpt-5.4",
+      "display_name": "gpt-5.4",
+      "provider": "openai",
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "https://api.openai.com/v1",
+      "parameters": {
+        "temperature": 0.3
+      }
+    },
+    {
+      "id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+      "type": "text",
+      "model": "gpt-4.1-mini",
+      "display_name": "gpt-4.1-mini",
+      "provider": "openai",
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "https://api.openai.com/v1"
+    },
+    {
+      "id": "c3d4e5f6-a7b8-4c9d-8e0f-1a2b3c4d5e6f",
+      "type": "stt",
+      "model": "gpt-4o-transcribe",
+      "display_name": "gpt-4o-transcribe",
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "https://api.openai.com/v1"
+    }
+  ],
+  "keymaps": [
+    {
+      "context": "os == macos",
+      "bindings": {
+        "cmd+f1": "open_context_menu",
+        "cmd+f2": "execute_active_prompt",
+        "cmd+f3": "set_context_value",
+        "shift+f3": "append_context_value",
+        "shift+f4": "clear_context",
+        "shift+f1": "speech_to_text_toggle"
+      }
+    },
+    {
+      "context": "os == linux",
+      "bindings": {
+        "ctrl+f1": "open_context_menu",
+        "ctrl+f2": "execute_active_prompt",
+        "ctrl+f3": "set_context_value",
+        "shift+f3": "append_context_value",
+        "shift+f4": "clear_context",
+        "shift+f1": "speech_to_text_toggle"
+      }
+    }
+  ],
+  "skills_order": [
+    "text-proofread",
+    "message-rewrite",
+    "prompt-refine",
+    "ticket-description",
+    "text-polish",
+    "translate",
+    "assistant"
+  ],
+  "webview_providers": [
+    { "id": "claude", "name": "Claude", "url": "https://claude.ai/" }
+  ]
+}
