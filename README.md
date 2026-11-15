@@ -40,7 +40,7 @@ The chat window also hosts the web apps of AI providers, such as ChatGPT and Cla
   <img src="docs/screenshots/recording-pill.png" alt="Recording pill while recording: waveform, 0:14 timer, pause, cancel and send buttons, and the Dictation target" width="288">
 </p>
 
-`Shift+F1` starts and stops a recording anywhere. The recording pill shows the waveform and timer, pauses or cancels, and picks where the transcript goes: plain dictation pasted into the app you were typing in, a prompt that runs on it, the chat, or the ChatGPT or Claude tab (or Claude Desktop). Transcription uses OpenAI Whisper or ElevenLabs; a failed transcription keeps the audio for a retry. On GNOME Wayland the pill is drawn by the bundled GNOME Shell extension.
+`Shift+F1` starts and stops a recording anywhere. The recording pill shows the waveform and timer, pauses or cancels, and picks where the transcript goes: plain dictation copied to the clipboard, a prompt that runs on it, the chat, or the ChatGPT or Claude tab (or Claude Desktop). Transcription uses OpenAI Whisper or ElevenLabs; a failed transcription keeps the audio for a retry. On GNOME Wayland the pill is drawn by the bundled GNOME Shell extension.
 
 ### History with full-text search
 
@@ -122,7 +122,7 @@ To build a local package:
 Platform notes:
 
 - **GNOME Wayland**: global shortcuts, menu placement and the recording pill need the GNOME Shell extension. The `.deb` installs it; from source, run `linux/gnome-shell-extension/install-dev.sh`. Then log out and in, and run `gnome-extensions enable promptheus@promptheus.desktop`.
-- **macOS**: global shortcuts need the Accessibility permission for the app.
+- **macOS**: two features need the Accessibility permission for the app: adding text selected in another app to the recording pill, and sending a transcript to Claude Desktop.
 
 ## First run
 
