@@ -17,8 +17,6 @@
   import { quickActionsModelId, sameAsChatLabel } from "$lib/utils/modelUses";
   import type { ModelConfig, SurfaceKind } from "$lib/types";
 
-  let { highlighted }: { highlighted: SurfaceKind | null } = $props();
-
   let headHeight = $state(0);
 
   type TextSurface = Exclude<SurfaceKind, "speech_to_text">;
@@ -63,6 +61,7 @@
   const store = getSettingsStore();
   const skills = getSkillsStore();
   const navigation = getSettingsNavigation();
+  const highlighted = $derived(navigation.highlightedAssignment);
 
   const surfaces = $derived(store.settings?.surfaces ?? null);
 
@@ -156,7 +155,11 @@
         </thead>
         <tbody>
           {#each TEXT_ROWS as row (row.surface)}
-            <tr id="assignment-{row.surface}" class:highlighted={highlighted === row.surface}>
+            <tr
+              id="assignment-{row.surface}"
+              data-setting-target="assignment-{row.surface}"
+              class:highlighted={highlighted === row.surface}
+            >
               <td class="feature">
                 {SURFACE_LABELS[row.surface]}
                 <small>{row.note}</small>
@@ -201,7 +204,11 @@
       <h3>Speech</h3>
       <table>
         <tbody>
-          <tr id="assignment-speech_to_text" class:highlighted={highlighted === "speech_to_text"}>
+          <tr
+            id="assignment-speech_to_text"
+            data-setting-target="assignment-speech_to_text"
+            class:highlighted={highlighted === "speech_to_text"}
+          >
             <td class="feature feature-col">
               {SURFACE_LABELS.speech_to_text}
               <small>Recording pill</small>
@@ -345,8 +352,11 @@
 
   tr.highlighted {
     outline: 2px solid var(--accent);
-    outline-offset: -2px;
     background: var(--accent-bg-soft);
+  }
+
+  tr[data-setting-target] {
+    outline-offset: -2px;
   }
 
   .feature-col {

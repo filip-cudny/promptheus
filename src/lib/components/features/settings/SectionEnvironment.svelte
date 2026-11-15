@@ -8,6 +8,7 @@
   import TextInput from "$lib/components/shared/ui/TextInput.svelte";
   import { onSettingsChanged } from "$lib/services/events";
   import { applyEnvVarOperation, getEnvVars } from "$lib/services/settings";
+import { getSettingsNavigation } from "$lib/stores/settingsNavigation.svelte";
   import type { EnvVarOperation, EnvVarStatus } from "$lib/types";
   import { groupByKind } from "$lib/utils/envVarOptions";
   import SettingsSection from "./SettingsSection.svelte";
@@ -34,6 +35,7 @@
   });
 
   const groups = $derived(groupByKind(vars));
+  const navigation = getSettingsNavigation();
 
   let unlisten: (() => void) | null = null;
 
@@ -171,7 +173,12 @@
 
 {#snippet row(v: EnvVarStatus)}
   {@const noun = v.secret ? "secret" : "variable"}
-  <div class="row">
+  <div
+    class="row"
+    id="env-var-{v.name}"
+    data-setting-target="env-var-{v.name}"
+    class:highlighted={navigation.highlightedEnv === v.name}
+  >
     <div class="head">
       <code class="name">{v.name}</code>
       <span class="state" class:ok={v.set} class:missing={!v.set}>
@@ -306,6 +313,13 @@
     gap: var(--space-3);
     padding-bottom: var(--space-6);
     border-bottom: 1px solid var(--border-faint);
+  }
+
+  .row.highlighted {
+    border-radius: var(--radius-md);
+    outline: 2px solid var(--accent);
+    outline-offset: 4px;
+    background: var(--accent-bg-soft);
   }
 
   .row:last-child {

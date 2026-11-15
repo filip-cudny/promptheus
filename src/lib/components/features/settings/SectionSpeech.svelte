@@ -4,9 +4,11 @@
   import SelectDropdown from "$lib/components/shared/ui/SelectDropdown.svelte";
   import PillAnchorPicker from "./PillAnchorPicker.svelte";
   import SettingField from "./SettingField.svelte";
+  import CrossLink from "./CrossLink.svelte";
   import PromptEditor from "./PromptEditor.svelte";
   import SttKeytermsEditor from "./SttKeytermsEditor.svelte";
   import { getSettingsStore } from "$lib/stores/settings.svelte";
+  import { CROSS_LINKS, shortcutsText } from "$lib/utils/settingsCrossLinks";
   import { setSpeechToTextModel, updateSpeechToTextConfig } from "$lib/services/settings";
   import { error as logError } from "@tauri-apps/plugin-log";
   import type { ClaudeTarget, SpeechToTextConfig, StopChatTarget } from "$lib/types";
@@ -124,6 +126,12 @@
 
       <div class="group">
         <h3>Recording</h3>
+
+        <CrossLink target={CROSS_LINKS.speechShortcuts} label="Keyboard shortcuts">
+          Start and stop dictation:
+          <kbd>{shortcutsText(store.settings?.keymaps ?? [], "speech_to_text_toggle")}</kbd>
+          in
+        </CrossLink>
 
         <SettingField key="surfaces.speech_to_text.show_recording_widget">
           <input

@@ -9,6 +9,8 @@
   import { sameAsChatLabel } from "$lib/utils/modelUses";
   import SettingsSection from "./SettingsSection.svelte";
   import SettingField from "./SettingField.svelte";
+  import CrossLink from "./CrossLink.svelte";
+  import { CROSS_LINKS } from "$lib/utils/settingsCrossLinks";
   import PromptEditor from "./PromptEditor.svelte";
   import WebviewProvidersEditor from "./WebviewProvidersEditor.svelte";
   import SurfaceToolsPicker from "./SurfaceToolsPicker.svelte";
@@ -80,6 +82,10 @@
               run("update_surface_model chat", () => updateSurfaceModel("chat", id || null))}
           />
         </SettingField>
+
+        <CrossLink target={CROSS_LINKS.chatModels} label="Models">
+          Add or configure models in
+        </CrossLink>
 
         <SettingField key="surfaces.chat.generation.parameters.reasoning_effort">
           <SelectDropdown

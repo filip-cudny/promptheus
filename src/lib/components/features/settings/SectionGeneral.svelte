@@ -8,6 +8,8 @@
   import SelectDropdown from "$lib/components/shared/ui/SelectDropdown.svelte";
   import SettingsSection from "./SettingsSection.svelte";
   import SettingField from "./SettingField.svelte";
+  import CrossLink from "./CrossLink.svelte";
+  import { CROSS_LINKS } from "$lib/utils/settingsCrossLinks";
   import type { AppearanceSettings, Skin } from "$lib/types";
 
   const SKIN_OPTIONS: ReadonlyArray<{ value: Skin; label: string }> = [
@@ -86,6 +88,9 @@
           </label>
         </SettingField>
       {/if}
+      <CrossLink target={CROSS_LINKS.generalShortcuts} label="Keyboard shortcuts">
+        Looking for keyboard shortcuts?
+      </CrossLink>
     </div>
   {/snippet}
 </SettingsSection>

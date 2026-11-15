@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount, untrack } from "svelte";
   import { Copy, Check } from "lucide-svelte";
-  import { error as logError } from "@tauri-apps/plugin-log";
+  import { error as logError, warn as logWarn } from "@tauri-apps/plugin-log";
   import { modelUseLabel } from "$lib/constants/surfaces";
   import type { ModelUse } from "$lib/utils/modelUses";
   import EnvVarPicker from "./EnvVarPicker.svelte";
@@ -15,14 +15,19 @@
   import SettingField from "./SettingField.svelte";
   import DangerZone from "./DangerZone.svelte";
   import ModelUseTags from "./ModelUseTags.svelte";
+  import CrossLink from "./CrossLink.svelte";
   import ActionIconButton from "$lib/components/shared/ui/ActionIconButton.svelte";
   import SaveStatusIndicator from "$lib/components/shared/widgets/SaveStatusIndicator.svelte";
   import { useSaveTracker } from "$lib/stores/saveTracker.svelte";
   import {
     addModel,
     deleteModel,
+    getEnvVars,
     updateModel,
   } from "$lib/services/settings";
+  import { onSettingsChanged } from "$lib/services/events";
+  import { parseEnvRef } from "$lib/utils/envVarOptions";
+  import { envLink } from "$lib/utils/settingsCrossLinks";
   import {
     prefetchCapabilities,
     getCachedCapabilities,
@@ -36,6 +41,7 @@
     type ModelCapabilities,
     type ModelConfig,
     type ModelParameters,
+    type EnvVarStatus,
     type ModelType,
     type Provider,
     type SurfaceKind,
@@ -81,9 +87,27 @@
 
   const tracker = useSaveTracker({ debounceMs: untrack(() => debounceMs) });
 
-  onMount(() => {
+  let envVars = $state<EnvVarStatus[]>([]);
+  let unlistenEnv: (() => void) | null = null;
+
+  const missingKeyVariable = $derived.by(() => {
+    const name = parseEnvRef(draft.api_key);
+    return name && envVars.some((v) => v.name === name && !v.set) ? name : null;
+  });
+
+  async function refreshEnvVars() {
+    try {
+      envVars = await getEnvVars();
+    } catch (e) {
+      logWarn("Failed to read get_env_vars: " + e);
+    }
+  }
+
+  onMount(async () => {
     tracker.attachKeyboard(window);
     tracker.attachBeforeUnload(window);
+    unlistenEnv = await onSettingsChanged(refreshEnvVars);
+    await refreshEnvVars();
   });
 
   let suppressCustomEntriesSave = true;
@@ -102,6 +126,7 @@
 
   onDestroy(() => {
     tracker.destroy();
+    unlistenEnv?.();
   });
 
   function extraOf(params: ModelParameters | null | undefined): Record<string, unknown> {
@@ -394,6 +419,12 @@
         }}
       />
     </SettingField>
+
+    {#if missingKeyVariable}
+      <CrossLink target={envLink(missingKeyVariable)} label="Set key">
+        {missingKeyVariable} has no value on this machine.
+      </CrossLink>
+    {/if}
 
     <SettingField key="models[].base_url" itemId={model.id}>
       <input

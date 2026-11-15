@@ -17,6 +17,8 @@
   import { quickActionsModelId, sameAsChatLabel } from "$lib/utils/modelUses";
   import SettingsSection from "./SettingsSection.svelte";
   import SettingField from "./SettingField.svelte";
+  import CrossLink from "./CrossLink.svelte";
+  import { CROSS_LINKS, shortcutsText } from "$lib/utils/settingsCrossLinks";
 
   const SECTION_NAMES: Record<string, string> = {
     chat: "Chat",
@@ -187,6 +189,14 @@
             oninput={saveDigitDelay}
           />
         </SettingField>
+
+        <h3>Shortcuts</h3>
+
+        <CrossLink target={CROSS_LINKS.contextMenuShortcuts} label="Keyboard shortcuts">
+          Open context menu:
+          <kbd>{shortcutsText(store.settings?.keymaps ?? [], "open_context_menu")}</kbd>
+          and 4 more context shortcuts live in
+        </CrossLink>
       </div>
     {/if}
   {/snippet}

@@ -37,7 +37,8 @@
   );
 
   const highlighted = $derived(
-    navigation.highlighted !== null && catalogPath(navigation.highlighted) === key,
+    (navigation.highlighted !== null && catalogPath(navigation.highlighted) === key) ||
+      navigation.isPersistentTarget(key),
   );
 
   $effect(() => {

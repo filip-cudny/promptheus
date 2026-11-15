@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount, tick, untrack } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { getSettingsStore } from "$lib/stores/settings.svelte";
   import { getSkillsStore } from "$lib/stores/skills.svelte";
   import { getSettingsNavigation } from "$lib/stores/settingsNavigation.svelte";
@@ -8,8 +8,6 @@
   import ModelAssignments from "./ModelAssignments.svelte";
   import CreateModelDialog from "./CreateModelDialog.svelte";
   import type { ModelType, SurfaceKind } from "$lib/types";
-
-  const HIGHLIGHT_MS = 2000;
 
   const store = getSettingsStore();
   const navigation = getSettingsNavigation();
@@ -41,27 +39,16 @@
     navigation.clearCreateModelType();
   });
 
-  let highlightedSurface = $state<SurfaceKind | null>(null);
-  let highlightTimer: ReturnType<typeof setTimeout> | null = null;
-
-  onDestroy(() => {
-    if (highlightTimer) clearTimeout(highlightTimer);
+  $effect(() => {
+    if (navigation.highlightedAssignment) selectedId = null;
   });
 
   function handleSelect(id: string) {
     selectedId = id;
   }
 
-  async function showUse(surface: SurfaceKind) {
-    selectedId = null;
-    if (highlightTimer) clearTimeout(highlightTimer);
-    highlightedSurface = surface;
-    highlightTimer = setTimeout(() => {
-      highlightedSurface = null;
-      highlightTimer = null;
-    }, HIGHLIGHT_MS);
-    await tick();
-    document.getElementById(`assignment-${surface}`)?.scrollIntoView({ block: "center" });
+  function showUse(surface: SurfaceKind) {
+    void navigation.navigateTo(`assignment:${surface}`);
   }
 </script>
 
@@ -94,7 +81,7 @@
         />
       {/key}
     {:else}
-      <ModelAssignments highlighted={highlightedSurface} />
+      <ModelAssignments />
     {/if}
   </div>
 </div>
