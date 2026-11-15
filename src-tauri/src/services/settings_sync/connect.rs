@@ -291,9 +291,10 @@ fn copy_path(from: &Path, to: &Path) -> io::Result<()> {
 }
 
 // Simplification: a local entry that is a symlink to somewhere else moves as the link, not as its
-// content, so a relative link target breaks after the move. Stops being correct when a config
-// entry (`settings.json`, `prompts`, `skills`) is a relative symlink outside the repository
-// before connecting. Upgrade path: resolve the link in `link_entry` and move the content.
+// content: the repository then holds a symlink, not the files, so local edits never reach a
+// commit and other machines get a dangling link. Stops being correct when a config entry
+// (`settings.json`, `prompts`, `skills`) is a symlink, relative or absolute, to a path outside the
+// repository before connecting. Upgrade path: resolve the link in `link_entry` and move the content.
 fn move_path(from: &Path, to: &Path) -> Result<(), String> {
     let moved = (|| {
         if let Some(parent) = to.parent() {
