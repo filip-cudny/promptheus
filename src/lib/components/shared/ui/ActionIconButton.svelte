@@ -29,7 +29,7 @@
     size?: "md" | "lg";
     confirmed?: boolean;
     active?: boolean;
-    variant?: "default" | "danger" | "primary" | "stop";
+    variant?: "default" | "danger" | "primary" | "muted" | "stop";
     element?: HTMLButtonElement;
     [key: string]: unknown;
   } = $props();
@@ -55,7 +55,7 @@
   class:active
   class:danger={variant === "danger"}
   class:primary={variant === "primary"}
-  class:stop={variant === "stop"}
+  class:muted={variant === "muted" || variant === "stop"}
   aria-label={label}
   title={title ?? label}
   {disabled}
@@ -103,8 +103,8 @@
 
   .action-icon-btn.primary,
   .action-icon-btn.primary:hover:not(:disabled),
-  .action-icon-btn.stop,
-  .action-icon-btn.stop:hover:not(:disabled) {
+  .action-icon-btn.muted,
+  .action-icon-btn.muted:hover:not(:disabled) {
     width: 28px;
     height: 28px;
     padding: 0;
@@ -116,12 +116,12 @@
     color: var(--surface-base);
   }
 
-  .action-icon-btn.stop {
+  .action-icon-btn.muted {
     background: var(--surface-overlay-strong);
     color: var(--text-secondary);
   }
 
-  .action-icon-btn.stop:hover:not(:disabled) {
+  .action-icon-btn.muted:hover:not(:disabled) {
     background: var(--surface-overlay-strong);
     color: var(--text-primary);
   }
