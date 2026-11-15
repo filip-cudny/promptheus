@@ -29,13 +29,15 @@
     size?: "md" | "lg";
     confirmed?: boolean;
     active?: boolean;
-    variant?: "default" | "danger" | "primary";
+    variant?: "default" | "danger" | "primary" | "stop";
     element?: HTMLButtonElement;
     [key: string]: unknown;
   } = $props();
   const feedback = useCopyFeedback<true>();
   let ActiveIcon = $derived(confirmIcon && (confirmed || feedback.confirmed) ? confirmIcon : icon);
-  let iconSize = $derived(size === "lg" || variant === "primary" ? ICON_SIZE.lg : ICON_SIZE.md);
+  let iconSize = $derived(
+    variant === "stop" ? ICON_SIZE.sm : size === "lg" || variant === "primary" ? ICON_SIZE.lg : ICON_SIZE.md,
+  );
 
   function handleClick(e: MouseEvent) {
     e.stopPropagation();
@@ -53,12 +55,17 @@
   class:active
   class:danger={variant === "danger"}
   class:primary={variant === "primary"}
+  class:stop={variant === "stop"}
   aria-label={label}
   title={title ?? label}
   {disabled}
   onclick={handleClick}
 >
-  <ActiveIcon size={iconSize} strokeWidth={variant === "primary" ? 3 : undefined} />
+  <ActiveIcon
+    size={iconSize}
+    strokeWidth={variant === "primary" ? 3 : undefined}
+    fill={variant === "stop" ? "currentColor" : undefined}
+  />
 </button>
 
 <style>
@@ -95,12 +102,28 @@
   }
 
   .action-icon-btn.primary,
-  .action-icon-btn.primary:hover:not(:disabled) {
+  .action-icon-btn.primary:hover:not(:disabled),
+  .action-icon-btn.stop,
+  .action-icon-btn.stop:hover:not(:disabled) {
     width: 28px;
     height: 28px;
     padding: 0;
     border-radius: 50%;
+  }
+
+  .action-icon-btn.primary,
+  .action-icon-btn.primary:hover:not(:disabled) {
     color: var(--surface-base);
+  }
+
+  .action-icon-btn.stop {
+    background: var(--surface-overlay-strong);
+    color: var(--text-secondary);
+  }
+
+  .action-icon-btn.stop:hover:not(:disabled) {
+    background: var(--surface-overlay-strong);
+    color: var(--text-primary);
   }
 
   .action-icon-btn.primary {

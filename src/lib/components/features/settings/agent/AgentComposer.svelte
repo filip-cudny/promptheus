@@ -91,7 +91,7 @@
           onclick={startDictation}
         />
         {#if running}
-          <ActionIconButton icon={Square} variant="primary" label="Stop" onclick={oncancel} />
+          <ActionIconButton icon={Square} variant="stop" label="Stop" onclick={oncancel} />
         {:else}
           <ActionIconButton
             icon={ArrowUp}

@@ -85,7 +85,8 @@ Rules for every button in the app.
     - default box 22 × 22 px (padding `--space-2`, icon `ICON_SIZE.md` 14 px): bubbles, sections, rows, inputs, editors, composers;
     - large box 28 × 28 px (icon 16 px): window and panel header controls (`AgentPanel` header, `ChatTopButtons`, `TabSidebarHeader`, `Modal` close) and the tab strip "New tab";
     - hover `--surface-overlay` in both sizes;
-    - the primary action of an icon-only bar is a filled circle, at most one per bar: 28 px, icon 16 px, stroke 3, `--text-primary` background, `--surface-base` icon, with a hover; in the composers (Send, Stop, Regenerate, Finish). The recording pill keeps its own colours with the same dimensions.
+    - the primary action of an icon-only bar is a filled circle, at most one per bar: 28 px, icon 16 px, stroke 3, `--text-primary` background, `--surface-base` icon, with a hover; in the composers (Send, Regenerate, Finish). The recording pill keeps its own colours with the same dimensions;
+    - Stop in the composers takes the place of Send while a run is in progress: `variant="stop"`, the same 28 px circle in `--surface-overlay-strong` with a 12 px filled `Square` in `--text-secondary` (`--text-primary` on hover). Reason: a filled white circle draws the eye to the one button that should stay available but unobtrusive while the answer streams.
 
 ### Button components
 
@@ -93,7 +94,7 @@ Rules for every button in the app.
   - `label` (required): `aria-label`, and `title` unless `title` is given;
   - `title` (optional): only for a shortcut ("Send (Enter)") or a disabled reason;
   - `size: "md" | "lg"` (box 22 / 28 px, icon 14 / 16 px); there is no numeric icon-px `size`;
-  - `variant: "default" | "danger" | "primary"`;
+  - `variant: "default" | "danger" | "primary" | "stop"`;
   - `type="button"`, `{...rest}` passed to the element (`aria-pressed`, `onmousedown`), a bindable `element` for anchors and refocus;
   - `stopPropagation` on click stays.
 - `npx svelte-check` fails on an `ActionIconButton` without `label`.

@@ -325,7 +325,7 @@
         />
 
         {#if store.isExecuting}
-          <ActionIconButton icon={Square} variant="primary" label="Stop" onclick={() => store.stopExecution()} />
+          <ActionIconButton icon={Square} variant="stop" label="Stop" onclick={() => store.stopExecution()} />
         {:else if store.abortRegenerateNodeId || store.isRegenerateMode}
           <ActionIconButton icon={RefreshCw} variant="primary" label="Regenerate" title="Regenerate (Enter)" onclick={sendOrRegenerate} />
         {:else}
