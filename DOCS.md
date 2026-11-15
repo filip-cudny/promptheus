@@ -4,7 +4,7 @@ Top-level index of the documentation files in the project. Updated incrementally
 
 ## Project Structure
 
-- [README.md](README.md) — landing, quick start, configuration, development commands
+- [README.md](README.md) — product overview with screenshots, install, first run, configuration and settings sync, links to developer docs
 - [src/DOCS.md](src/DOCS.md) — Svelte frontend: layout and conventions
 - [src-tauri/DOCS.md](src-tauri/DOCS.md) — Rust backend: layout and conventions
 - [scripts/screenshots/DOCS.md](scripts/screenshots/DOCS.md) — Screenshot generator: run, fixtures, adding a view
