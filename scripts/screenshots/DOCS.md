@@ -17,6 +17,8 @@
 - `setup`: the settings window with the first-run setup banner on step 4 (shortcuts), steps 1-3 done.
 - `recording-pill`: the WebKit recording pill while recording, on a mid-grey backdrop.
 
+`history` reuses `chatEntry` from `views/conversation.ts`, so a change to the conversation fixture's turns needs `pnpm screenshots conversation history`.
+
 ## Failures
 
 The run exits non-zero, naming the view and the cause, on:
