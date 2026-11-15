@@ -17,15 +17,6 @@
   import { quickActionsModelId, sameAsChatLabel } from "$lib/utils/modelUses";
   import SettingsSection from "./SettingsSection.svelte";
   import SettingField from "./SettingField.svelte";
-  import ShortcutField from "./ShortcutField.svelte";
-
-  const SHORTCUT_ACTIONS = [
-    "open_context_menu",
-    "execute_active_prompt",
-    "set_context_value",
-    "append_context_value",
-    "clear_context",
-  ];
 
   const SECTION_NAMES: Record<string, string> = {
     chat: "Chat",
@@ -125,10 +116,15 @@
   }
 </script>
 
-<SettingsSection title="Context menu">
+<SettingsSection
+  title="Context menu"
+  hint="The menu opened over selected text: its model and its layout."
+>
   {#snippet body()}
     {#if quick}
       <div class="group">
+        <h3>Model</h3>
+
         <SettingField key="surfaces.quick_actions.generation.model_id">
           <SelectDropdown
             value={quick.model_id ?? ""}
@@ -152,6 +148,8 @@
               )}
           />
         </SettingField>
+
+        <h3>Menu</h3>
 
         <SettingField key="menu_section_order">
           <ul class="order">
@@ -189,10 +187,6 @@
             oninput={saveDigitDelay}
           />
         </SettingField>
-
-        {#each SHORTCUT_ACTIONS as action (action)}
-          <ShortcutField {action} />
-        {/each}
       </div>
     {/if}
   {/snippet}
@@ -204,6 +198,15 @@
     flex-direction: column;
     gap: var(--space-6);
     max-width: 760px;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    color: var(--text-disabled);
   }
 
   .order {

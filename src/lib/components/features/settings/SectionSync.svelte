@@ -73,7 +73,7 @@
 
 <SettingsSection
   title="Sync"
-  hint="Settings, prompts and skills sync through the git repo their config dir entries link to."
+  hint="Keeps settings, prompts and skills the same on all your machines through a git repository."
 >
   {#snippet body()}
     {#if status && view}

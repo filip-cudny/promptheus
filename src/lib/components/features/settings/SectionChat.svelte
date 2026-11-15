@@ -64,7 +64,10 @@
   }
 </script>
 
-<SettingsSection title="Chat">
+<SettingsSection
+  title="Chat"
+  hint="The chat window: its model, tools and web chat providers."
+>
   {#snippet body()}
     {#if chat}
       <div class="group">

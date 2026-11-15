@@ -13,6 +13,7 @@
   import SectionSync from "./SectionSync.svelte";
   import SectionMcpServers from "./SectionMcpServers.svelte";
   import SectionEnvironment from "./SectionEnvironment.svelte";
+  import SectionShortcuts from "./SectionShortcuts.svelte";
 
   const store = getSettingsStore();
   const navigation = getSettingsNavigation();
@@ -50,6 +51,8 @@
     <SectionSync />
   {:else if activeSection === "environment"}
     <SectionEnvironment />
+  {:else if activeSection === "shortcuts"}
+    <SectionShortcuts />
   {/if}
 </main>
 

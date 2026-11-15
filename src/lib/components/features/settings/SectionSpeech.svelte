@@ -6,7 +6,6 @@
   import SettingField from "./SettingField.svelte";
   import PromptEditor from "./PromptEditor.svelte";
   import SttKeytermsEditor from "./SttKeytermsEditor.svelte";
-  import ShortcutField from "./ShortcutField.svelte";
   import { getSettingsStore } from "$lib/stores/settings.svelte";
   import { setSpeechToTextModel, updateSpeechToTextConfig } from "$lib/services/settings";
   import { error as logError } from "@tauri-apps/plugin-log";
@@ -121,10 +120,6 @@
             description="Domain words to bias transcription — names, jargon, brands, acronyms. One term per line."
           />
         </div>
-      </div>
-
-      <div class="group">
-        <ShortcutField action="speech_to_text_toggle" />
       </div>
 
       <div class="group">

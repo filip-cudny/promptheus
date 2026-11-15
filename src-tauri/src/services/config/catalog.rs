@@ -22,6 +22,7 @@ pub enum Section {
     ContextMenu,
     Speech,
     Environment,
+    Shortcuts,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -147,11 +148,6 @@ pub const ENTRIES: &[CatalogEntry] = &[
     live("menu_section_order", ContextMenu, "Menu section order", "Order of the sections in the context menu.", Kind::List),
     live("recent_apps_count", ContextMenu, "Recent apps", "How many recently used apps the context menu remembers.", int(Some(0), None)),
     live("menu_digit_select_delay_ms", ContextMenu, "Digit selection delay", "How long the menu waits for a second digit when a two-digit number is possible.", int(Some(100), Some(1000))),
-    live("keymaps.open_context_menu", ContextMenu, "Open context menu", "Global shortcut that opens the context menu.", Kind::Shortcut),
-    live("keymaps.execute_active_prompt", ContextMenu, "Run active prompt", "Global shortcut that runs the active prompt.", Kind::Shortcut),
-    live("keymaps.set_context_value", ContextMenu, "Set context", "Global shortcut that sets the context value from the selection.", Kind::Shortcut),
-    live("keymaps.append_context_value", ContextMenu, "Append to context", "Global shortcut that appends the selection to the context value.", Kind::Shortcut),
-    live("keymaps.clear_context", ContextMenu, "Clear context", "Global shortcut that clears the context value.", Kind::Shortcut),
     live("surfaces.speech_to_text.model_id", Speech, "Speech model", "Model used to transcribe recordings.", STT_MODEL),
     live("surfaces.speech_to_text.language", Speech, "Language", "Language hint sent to the transcription model.", TEXT),
     live("surfaces.speech_to_text.no_verbatim", Speech, "No verbatim", "Asks the transcription model to clean up filler words and false starts.", Kind::Bool),
@@ -163,7 +159,12 @@ pub const ENTRIES: &[CatalogEntry] = &[
     live("surfaces.speech_to_text.recording_widget_anchor", Speech, "Recording widget anchor", "Where the recording pill sits relative to its anchor point.", Kind::Choice { values: &["above_right", "above_center", "above_left", "below_right", "below_center", "below_left"] }),
     live("surfaces.speech_to_text.claude_target", Speech, "Claude target", "Where a transcription sent to Claude goes: the Claude webview or Claude Desktop.", Kind::Choice { values: &["webview", "desktop"] }),
     live("surfaces.speech_to_text.stop_chat_target", Speech, "Stop + chat target", "Where Stop + chat sends the transcription: the app chat or Claude.", Kind::Choice { values: &["chat", "claude"] }),
-    live("keymaps.speech_to_text_toggle", Speech, "Toggle speech to text", "Global shortcut that starts and stops a recording.", Kind::Shortcut),
+    live("keymaps.open_context_menu", Shortcuts, "Open context menu", "Global shortcut that opens the context menu.", Kind::Shortcut),
+    live("keymaps.execute_active_prompt", Shortcuts, "Run active prompt", "Global shortcut that runs the active prompt.", Kind::Shortcut),
+    live("keymaps.set_context_value", Shortcuts, "Set context", "Global shortcut that sets the context value from the selection.", Kind::Shortcut),
+    live("keymaps.append_context_value", Shortcuts, "Append to context", "Global shortcut that appends the selection to the context value.", Kind::Shortcut),
+    live("keymaps.clear_context", Shortcuts, "Clear context", "Global shortcut that clears the context value.", Kind::Shortcut),
+    live("keymaps.speech_to_text_toggle", Shortcuts, "Toggle speech to text", "Global shortcut that starts and stops a recording.", Kind::Shortcut),
     live("env_vars[].name", Environment, "Name", "Name of the environment variable, referenced as ${NAME} in settings.", TEXT),
     live("env_vars[].description", Environment, "Description", "What the variable is used for.", TEXT),
     live("env_vars[].secret", Environment, "Secret", "Masks the value wherever it is shown.", Kind::Bool),
@@ -444,6 +445,20 @@ mod tests {
             assert!(seen.insert(entry.key), "duplicate entry {}", entry.key);
             assert!(!FILE_ONLY.contains(&entry.key), "{} is also file-only", entry.key);
         }
+    }
+
+    #[test]
+    fn only_keymap_entries_are_in_shortcuts_section() {
+        for entry in ENTRIES {
+            assert_eq!(
+                entry.section == Shortcuts,
+                entry.key.starts_with("keymaps."),
+                "{}",
+                entry.key
+            );
+        }
+        let shortcuts = ENTRIES.iter().filter(|e| e.section == Shortcuts).count();
+        assert_eq!(shortcuts, 6);
     }
 
     #[test]

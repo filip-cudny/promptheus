@@ -10,7 +10,8 @@ export type CatalogSection =
   | "mcp_servers"
   | "chat"
   | "context_menu"
-  | "speech";
+  | "speech"
+  | "shortcuts";
 
 export type CatalogKind =
   | { type: "bool" }

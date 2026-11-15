@@ -37,7 +37,7 @@
   }
 </script>
 
-<SettingsSection title="General">
+<SettingsSection title="General" hint="How the app looks and starts.">
   {#snippet body()}
     <div class="group">
       <SettingField key="theme">

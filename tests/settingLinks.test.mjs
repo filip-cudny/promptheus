@@ -21,6 +21,7 @@ test("setting links are relabelled show, other links stay", () => {
 test("section link yields its section id", () => {
   assert.strictEqual(parseSectionLink("section:environment"), "environment");
   assert.strictEqual(parseSectionLink("section:sync"), "sync");
+  assert.strictEqual(parseSectionLink("section:shortcuts"), "shortcuts");
 });
 
 test("unknown section and field keys are not section links", () => {

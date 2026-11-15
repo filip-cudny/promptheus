@@ -14,6 +14,7 @@ const SECTION_IDS = [
   "chat",
   "context_menu",
   "speech",
+  "shortcuts",
 ] as const satisfies readonly CatalogSection[];
 
 const SETTING_SCHEME = "setting:";

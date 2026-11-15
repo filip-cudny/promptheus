@@ -11,7 +11,8 @@
     | "mcp_servers"
     | "chat"
     | "context_menu"
-    | "speech";
+    | "speech"
+    | "shortcuts";
 
   export interface SidebarItem {
     id: SettingsSection;
@@ -25,19 +26,18 @@
 
   export const SIDEBAR_GROUPS: SidebarGroup[] = [
     {
-      label: "App",
+      label: "General",
       items: [
         { id: "general", label: "General" },
         { id: "notifications", label: "Notifications" },
-        { id: "history", label: "History" },
-        { id: "sync", label: "Sync" },
-        { id: "environment", label: "Environment" },
+        { id: "shortcuts", label: "Keyboard shortcuts" },
       ],
     },
     {
       label: "AI",
       items: [
         { id: "models", label: "Models" },
+        { id: "environment", label: "Environment" },
         { id: "prompt_base", label: "Prompt Base" },
         { id: "skills", label: "Skills" },
         { id: "mcp_servers", label: "MCP Servers" },
@@ -49,6 +49,13 @@
         { id: "chat", label: "Chat" },
         { id: "context_menu", label: "Context menu" },
         { id: "speech", label: "Speech" },
+      ],
+    },
+    {
+      label: "Data",
+      items: [
+        { id: "history", label: "History" },
+        { id: "sync", label: "Sync" },
       ],
     },
   ];
