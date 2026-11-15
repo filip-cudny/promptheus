@@ -67,8 +67,8 @@ Promptheus is an MCP (Model Context Protocol) client. Add MCP servers in Setting
 No public binaries yet: build from source. Install [Node.js ≥ 20](https://nodejs.org), [pnpm ≥ 9](https://pnpm.io/installation), [Rust stable](https://www.rust-lang.org/tools/install) and the system dependencies below, then:
 
 ```bash
-git clone https://github.com/filip-cudny/promptheus2.git
-cd promptheus2
+git clone https://github.com/filip-cudny/promptheus.git
+cd promptheus
 pnpm install
 pnpm tauri dev
 ```
