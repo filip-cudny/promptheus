@@ -3,7 +3,7 @@
 A tray-resident AI prompt launcher for Linux and macOS: a global hotkey opens a context menu of your prompts over the selected text, next to a streaming LLM chat, speech-to-text dictation with a recording pill, MCP tools, ChatGPT and Claude web apps in tabs, and searchable history.
 
 <p align="center">
-  <img src="docs/screenshots/conversation.png" alt="Promptheus chat window: a /refactor skill request and a streamed answer with a highlighted JavaScript code block" width="700">
+  <img src="docs/screenshots/conversation.png" alt="Promptheus chat window: an /explain-code skill request on a code snippet, a follow-up and an answer with a highlighted JavaScript code block" width="700">
 </p>
 
 Promptheus lives in the system tray and stays out of the way until you press a shortcut. Select text in any app, press the global hotkey, pick a prompt, and the answer lands on your clipboard or in a chat window. Built with Tauri 2, Svelte 5 and Rust. Pre-1.0.

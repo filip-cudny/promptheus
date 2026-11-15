@@ -11,7 +11,7 @@
 
 - `settings`: Models section with the settings agent panel widened after one invented exchange.
 - `context-menu`: the context menu with four prompts, last interaction and context, clipped to the menu.
-- `conversation`: the chat window with a two-turn conversation restored from history, the last answer holding a highlighted code block.
+- `conversation`: the chat window with a two-turn conversation restored from history, the first turn an `/explain-code` skill request on a code snippet, the last answer holding a highlighted code block.
 - `palette`: the command palette after `palette:show` with two providers and three tabs, clipped to the palette.
 - `history`: the history window with results for the query `search`, typed into its search field.
 - `setup`: the settings window with the first-run setup banner on step 4 (shortcuts), steps 1-3 done.

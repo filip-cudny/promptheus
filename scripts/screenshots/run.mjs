@@ -18,7 +18,7 @@ const settleTimeoutMs = 15000;
 const VIEWS = {
   settings: { page: "settings-dialog.html", width: 1340, height: 640 },
   "context-menu": { page: "context-menu.html", width: 320, height: 400, clip: ".menu-shell" },
-  conversation: { page: "conversation-dialog.html", width: 700, height: 600 },
+  conversation: { page: "conversation-dialog.html", width: 700, height: 800 },
   palette: { page: "palette.html", width: 520, height: 400, clip: ".palette-modal" },
   history: { page: "history-dialog.html", width: 600, height: 500, type: "search" },
   setup: { page: "settings-dialog.html", width: 960, height: 640 },

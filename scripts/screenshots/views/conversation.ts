@@ -11,18 +11,17 @@ const skills = [
   skill("fix-grammar", "Fix grammar", "Corrects grammar and spelling, keeping the tone."),
   skill("summarize", "Summarize", "Condenses the text into a few bullet points."),
   skill("explain-code", "Explain code", "Explains what a code snippet does, step by step."),
-  skill("refactor", "Refactor", "Rewrites a code snippet to be simpler, keeping its behaviour."),
 ];
 
 const skillsFull = skills.map((s) => ({ ...s, model: null, parameters: null, body: "", file_path: `skills/${s.name}.md` }));
 
 const turns = [
   [
-    "Why does our search box send a request on every keystroke? input.oninput = (e) => search(e.target.value);",
+    "/explain-code\ninput.oninput = (e) => search(e.target.value);",
     "The handler calls `search` on **every keystroke**: typing \"weather\" sends seven requests, and a slow early answer can overwrite a newer one.",
   ],
   [
-    "/refactor make it wait until I stop typing",
+    "make it wait until I stop typing",
     [
       "Debounce the handler, so only the last keystroke within 300 ms runs the search:",
       "",
@@ -38,7 +37,7 @@ const turns = [
       "input.oninput = debounce((e) => search(e.target.value));",
       "```",
       "",
-      "Typing \"weather\" now sends a single request, 300 ms after the last key, so an older answer has nothing left to overwrite. Raise `ms` when your backend is slow to answer, or lower it when results should appear while the user is still typing.",
+      "Typing \"weather\" now sends one request, 300 ms after the last key, so no older answer is left to overwrite it.",
     ].join("\n"),
   ],
 ];
