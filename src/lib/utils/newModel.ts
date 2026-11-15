@@ -37,3 +37,14 @@ export function buildNewModel(draft: NewModelDraft, id: string): ModelConfig {
     store: true,
   };
 }
+
+const MODEL_LIST_URLS: Record<Provider, string> = {
+  openai: "https://platform.openai.com/docs/models",
+  anthropic: "https://docs.claude.com/en/docs/about-claude/models/overview",
+  gemini: "https://ai.google.dev/gemini-api/docs/models",
+  elevenlabs: "https://elevenlabs.io/docs/models",
+};
+
+export function modelListUrl(provider: Provider | null): string | null {
+  return provider ? MODEL_LIST_URLS[provider] : null;
+}

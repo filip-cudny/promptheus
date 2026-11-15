@@ -3,10 +3,11 @@
   import Modal from "$lib/components/shared/ui/Modal.svelte";
   import Button from "$lib/components/shared/ui/Button.svelte";
   import EnvVarPicker from "./EnvVarPicker.svelte";
-  import { addModel } from "$lib/services/settings";
+  import { openUrl } from "@tauri-apps/plugin-opener";
+  import { addModel, testModel } from "$lib/services/settings";
   import { getSettingsStore } from "$lib/stores/settings.svelte";
   import { generateId } from "$lib/utils/id";
-  import { buildNewModel, newModelErrors } from "$lib/utils/newModel";
+  import { buildNewModel, modelListUrl, newModelErrors } from "$lib/utils/newModel";
   import type { ModelType, Provider } from "$lib/types";
 
   let {
@@ -16,7 +17,7 @@
   }: {
     modelType: ModelType;
     onClose: () => void;
-    onCreated: (id: string) => void;
+    onCreated: (id: string, testPassed: boolean) => void;
   } = $props();
 
   const store = getSettingsStore();
@@ -39,6 +40,8 @@
   let baseUrl = $state("");
   let touched = $state<Record<string, boolean>>({});
   let submitting = $state(false);
+  let testing = $state(false);
+  let testRun = $state<{ draftKey: string; ok: boolean; message: string } | null>(null);
   let displayNameEl = $state<HTMLInputElement | undefined>(undefined);
 
   const draft = $derived({
@@ -50,6 +53,9 @@
     base_url: baseUrl,
   });
   const errors = $derived(newModelErrors(draft));
+  const listUrl = $derived(modelListUrl(draft.provider));
+  const draftKey = $derived(JSON.stringify(draft));
+  const testResult = $derived(testRun?.draftKey === draftKey ? testRun : null);
 
   onMount(() => {
     displayNameEl?.focus();
@@ -71,6 +77,30 @@
     provider = next === "text" ? "openai" : "";
   }
 
+  async function runTest() {
+    if (testing || Object.keys(errors).length > 0) return;
+    const ranOn = draftKey;
+    testing = true;
+    try {
+      const result = await testModel(buildNewModel(draft, id));
+      testRun = {
+        draftKey: ranOn,
+        ok: result.ok,
+        message: result.ok
+          ? `OK · ${result.millis ?? 0} ms · the model answered.`
+          : (result.error ?? "Test failed"),
+      };
+    } catch (e) {
+      testRun = {
+        draftKey: ranOn,
+        ok: false,
+        message: e instanceof Error ? e.message : String(e),
+      };
+    } finally {
+      testing = false;
+    }
+  }
+
   async function handleSubmit(e: Event) {
     e.preventDefault();
     if (submitting || Object.keys(errors).length > 0) return;
@@ -78,7 +108,7 @@
     try {
       await addModel(buildNewModel(draft, id));
       await store.refresh();
-      onCreated(id);
+      onCreated(id, testResult?.ok ?? false);
       onClose();
     } catch {
       return;
@@ -122,11 +152,15 @@
     </div>
 
     <div class="field">
-      <label for="cmd-model">Model</label>
+      <div class="label-row">
+        <label for="cmd-model">Model</label>
+        {#if listUrl}
+          <button type="button" class="link" onclick={() => void openUrl(listUrl)}>Model ids</button>
+        {/if}
+      </div>
       <input
         id="cmd-model"
         type="text"
-        placeholder="gpt-4.1-mini"
         bind:value={model}
         onblur={() => touch("model")}
         class:error={errorFor("model")}
@@ -134,6 +168,7 @@
         autocomplete="off"
       />
       {#if errorFor("model")}<span class="hint err">{errorFor("model")}</span>{/if}
+      <span class="hint">Type the model id from the provider's docs.</span>
     </div>
 
     <div class="field">
@@ -163,8 +198,18 @@
       {#if errorFor("base_url")}<span class="hint err">{errorFor("base_url")}</span>{/if}
     </div>
 
+    {#if testResult}
+      <p class="test-note" class:err={!testResult.ok} role="status">{testResult.message}</p>
+    {/if}
+
     <footer>
       <Button onclick={onClose}>Cancel</Button>
+      <Button
+        onclick={() => void runTest()}
+        disabled={Object.keys(errors).length > 0 || testing || submitting}
+      >
+        {testing ? "Testing…" : "Test"}
+      </Button>
       <Button
         variant="primary"
         type="submit"
@@ -191,6 +236,37 @@
   .label {
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
+  }
+
+  .label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .link {
+    background: none;
+    border: none;
+    padding: var(--space-0);
+    font: inherit;
+    font-size: var(--font-size-sm);
+    color: var(--accent);
+    cursor: pointer;
+  }
+
+  .link:hover {
+    text-decoration: underline;
+  }
+
+  .test-note {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+  }
+
+  .test-note.err {
+    color: var(--danger);
   }
 
   input[type="text"],

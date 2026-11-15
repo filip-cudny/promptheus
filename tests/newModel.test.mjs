@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildNewModel, newModelErrors } from "../src/lib/utils/newModel.ts";
+import { buildNewModel, modelListUrl, newModelErrors } from "../src/lib/utils/newModel.ts";
 
 const complete = {
   type: "text",
@@ -35,4 +35,18 @@ test("buildNewModel keeps the id and stores by default", () => {
   const model = buildNewModel(complete, "id-1");
   assert.equal(model.id, "id-1");
   assert.equal(model.store, true);
+});
+
+test("modelListUrl links each provider to its model list", () => {
+  assert.equal(modelListUrl("openai"), "https://platform.openai.com/docs/models");
+  assert.equal(
+    modelListUrl("anthropic"),
+    "https://docs.claude.com/en/docs/about-claude/models/overview",
+  );
+  assert.equal(modelListUrl("gemini"), "https://ai.google.dev/gemini-api/docs/models");
+  assert.equal(modelListUrl("elevenlabs"), "https://elevenlabs.io/docs/models");
+});
+
+test("modelListUrl is null without a provider", () => {
+  assert.equal(modelListUrl(null), null);
 });
