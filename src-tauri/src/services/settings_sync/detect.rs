@@ -10,6 +10,7 @@ pub struct SyncRepo {
     pub top_level: PathBuf,
     pub stage_paths: Vec<PathBuf>,
     pub branch: String,
+    pub settings_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,6 +46,7 @@ pub async fn detect(runner: &GitRunner, config_dir: &Path) -> Detection {
     }
 
     let change_log_dir = settings_target
+        .as_ref()
         .and_then(|target| target.parent().map(|parent| parent.join(CHANGE_LOG_DIR_NAME)))
         .filter(|dir| dir.is_dir());
     let stage_paths = found
@@ -69,6 +71,7 @@ pub async fn detect(runner: &GitRunner, config_dir: &Path) -> Detection {
             top_level,
             stage_paths,
             branch: output.stdout,
+            settings_path: settings_target,
         }),
         Err(e) => Detection::Error(e.to_string()),
     }

@@ -17,6 +17,21 @@ use crate::services::skill::SkillService;
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
+fn multiline_settings(theme: &str) -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "theme": theme,
+        "models": [{
+            "id": "m",
+            "type": "text",
+            "model": "gpt-4",
+            "display_name": "M",
+            "provider": "openai",
+            "api_key": "k"
+        }]
+    }))
+    .unwrap()
+}
+
 struct Fixture {
     tmp: TempDir,
     env: HashMap<String, String>,
@@ -48,7 +63,7 @@ impl Fixture {
         self.git(root, &["init", "--bare", "origin.git"]);
         self.git(root, &["clone", "origin.git", "a"]);
         let a = self.a();
-        write(&a.join("tauri-app/settings.json"), "line1\nline2\n");
+        write(&a.join("tauri-app/settings.json"), &multiline_settings("first"));
         write(&a.join("tauri-app/prompts/p.md"), "prompt\n");
         write(&a.join("tauri-app/skills/s/SKILL.md"), "skill\n");
         write(&a.join("tauri-app/other.txt"), "other\n");
@@ -133,8 +148,9 @@ impl SyncHooks for RecordingHooks {
         *self.locks.lock().unwrap() += 1;
     }
 
-    async fn reload(&self, _guard: &mut Self::Guard, changed: &[PathBuf]) {
+    async fn reload(&self, _guard: &mut Self::Guard, changed: &[PathBuf]) -> Result<(), String> {
         self.reloads.lock().unwrap().push(changed.to_vec());
+        Ok(())
     }
 
     fn status_changed(&self, status: &SyncStatus) {
@@ -153,7 +169,7 @@ fn completed(result: SyncResult) -> CycleReport {
 async fn local_change_is_committed_and_pushed() {
     let f = Fixture::new();
     let a = f.a();
-    write(&a.join("tauri-app/settings.json"), "line1 changed\nline2\n");
+    write(&a.join("tauri-app/settings.json"), &multiline_settings("changed"));
     write(&a.join("tauri-app/prompts/scratch.tmp"), "tmp\n");
     write(&a.join("tauri-app/extra.txt"), "staged elsewhere\n");
     f.git(&a, &["add", "tauri-app/extra.txt"]);
@@ -172,6 +188,32 @@ async fn local_change_is_committed_and_pushed() {
     assert!(f
         .git(&a, &["status", "--porcelain"])
         .contains("A  tauri-app/extra.txt"));
+}
+
+#[tokio::test]
+async fn invalid_settings_json_is_not_committed() {
+    let f = Fixture::new();
+    let a = f.a();
+    let origin_log = f.git(&f.origin(), &["log", "--format=%H", "main"]);
+    write(
+        &a.join("tauri-app/settings.json"),
+        &format!("<<<<<<< HEAD\n{}", multiline_settings("broken")),
+    );
+
+    let hooks = RecordingHooks::default();
+    let report = completed(f.engine_a().sync(Trigger::Manual, &hooks).await);
+
+    assert_eq!(report.status.state, SyncState::Error);
+    assert!(report
+        .status
+        .message
+        .unwrap()
+        .contains("settings.json is invalid"));
+    assert_eq!(f.git(&f.origin(), &["log", "--format=%H", "main"]), origin_log);
+    assert_eq!(
+        f.git(&a, &["status", "--porcelain", "--untracked-files=all"]),
+        "M tauri-app/settings.json"
+    );
 }
 
 #[tokio::test]
@@ -214,10 +256,10 @@ async fn remote_change_is_pulled_and_reported() {
 #[tokio::test]
 async fn conflict_aborts_rebase_and_pauses_periodic() {
     let f = Fixture::new();
-    write(&f.b().join("tauri-app/settings.json"), "line1 from b\nline2\n");
+    write(&f.b().join("tauri-app/settings.json"), &multiline_settings("from b"));
     f.git(&f.b(), &["commit", "-am", "b change"]);
     f.git(&f.b(), &["push"]);
-    write(&f.a().join("tauri-app/settings.json"), "line1 from a\nline2\n");
+    write(&f.a().join("tauri-app/settings.json"), &multiline_settings("from a"));
 
     let engine = f.engine_a();
     let hooks = RecordingHooks::default();
@@ -287,7 +329,9 @@ impl SyncHooks for BlockingHooks {
         self.release.notified().await;
     }
 
-    async fn reload(&self, _guard: &mut Self::Guard, _changed: &[PathBuf]) {}
+    async fn reload(&self, _guard: &mut Self::Guard, _changed: &[PathBuf]) -> Result<(), String> {
+        Ok(())
+    }
 
     fn status_changed(&self, _status: &SyncStatus) {}
 }
@@ -358,6 +402,7 @@ async fn detects_repo_from_symlinks() {
                 PathBuf::from("tauri-app/skills"),
             ],
             branch: "main".to_string(),
+            settings_path: Some(f.a().canonicalize().unwrap().join("tauri-app/settings.json")),
         })
     );
 }
@@ -500,7 +545,7 @@ impl SyncHooks for ReloadingHooks {
         self.reloaded.lock().unwrap().merge(reloaded);
     }
 
-    async fn reload(&self, _guard: &mut Self::Guard, changed: &[PathBuf]) {
+    async fn reload(&self, _guard: &mut Self::Guard, changed: &[PathBuf]) -> Result<(), String> {
         let reloaded = reload_changed(
             changed,
             &self.config_dir.join("settings.json"),
@@ -510,8 +555,9 @@ impl SyncHooks for ReloadingHooks {
             &mut self.skills.lock().unwrap(),
             self.database.lock().unwrap().conn(),
         )
-        .unwrap();
+        .map_err(|e| e.to_string())?;
         self.reloaded.lock().unwrap().merge(reloaded);
+        Ok(())
     }
 
     fn status_changed(&self, _status: &SyncStatus) {}
@@ -612,4 +658,20 @@ async fn pulled_change_log_entry_sets_change_log_only() {
     let reloaded = f.sync_a().await;
 
     assert_eq!(reloaded, Reloaded { settings: false, skills: false, change_log: true });
+}
+
+#[tokio::test]
+async fn pulled_invalid_settings_json_is_a_failed_reload() {
+    let f = ReloadFixture::new();
+    f.push_from_b("settings.json", "<<<<<<< HEAD\n{}");
+
+    let hooks = f.hooks();
+    let report = completed(f.engine_a().sync(Trigger::Manual, &hooks).await);
+
+    assert_eq!(report.status.state, SyncState::Error);
+    assert!(report
+        .status
+        .message
+        .unwrap()
+        .contains("reload after sync failed"));
 }

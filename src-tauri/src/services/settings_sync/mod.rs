@@ -18,7 +18,7 @@ use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 use crate::commands::settings::apply_settings_reload;
 use crate::commands::skills::emit_changed as emit_skills_changed;
 use crate::services::change_log::change_log_dir;
-use crate::services::config::ConfigService;
+use crate::services::config::{check_settings_document, ConfigService};
 use crate::services::notification::{NotificationLevel, NotificationService};
 use crate::services::skill::SkillService;
 use crate::services::sqlite_history::SqliteHistoryService;
@@ -75,7 +75,7 @@ pub trait SyncHooks: Send + Sync {
     type Guard: Send;
 
     async fn lock_local(&self) -> Self::Guard;
-    async fn reload(&self, guard: &mut Self::Guard, changed: &[PathBuf]);
+    async fn reload(&self, guard: &mut Self::Guard, changed: &[PathBuf]) -> Result<(), String>;
     fn status_changed(&self, status: &SyncStatus);
 }
 
@@ -320,7 +320,10 @@ impl SettingsSync {
         let mut guard = hooks.lock_local().await;
         let changed = self.commit_and_rebase(runner, repo).await?;
         if !changed.is_empty() {
-            hooks.reload(&mut guard, &changed).await;
+            hooks
+                .reload(&mut guard, &changed)
+                .await
+                .map_err(|message| Stop::Error(format!("reload after sync failed: {message}")))?;
         }
         Ok(changed)
     }
@@ -331,6 +334,15 @@ impl SettingsSync {
         repo: &SyncRepo,
     ) -> Result<Vec<PathBuf>, Stop> {
         let top = repo.top_level.as_path();
+
+        if let Some(settings_path) = &repo.settings_path {
+            let content = std::fs::read_to_string(settings_path).map_err(|e| {
+                Stop::Error(format!("settings.json could not be read and was not committed: {e}"))
+            })?;
+            check_settings_document(&content).map_err(|e| {
+                Stop::Error(format!("settings.json is invalid and was not committed: {e}"))
+            })?;
+        }
 
         let mut add = vec![OsString::from("add"), "-A".into(), "--".into()];
         add.extend(repo.stage_paths.iter().map(OsString::from));
@@ -454,12 +466,12 @@ impl SyncHooks for AppHooks {
         guard
     }
 
-    async fn reload(&self, guard: &mut LocalGuard, changed: &[PathBuf]) {
+    async fn reload(&self, guard: &mut LocalGuard, changed: &[PathBuf]) -> Result<(), String> {
         let config_dir = match self.app.path().app_config_dir() {
             Ok(dir) => dir,
             Err(e) => {
                 log::warn!("settings sync: config dir unavailable, skipping reload: {e}");
-                return;
+                return Ok(());
             }
         };
         let history = self.app.state::<Arc<AsyncMutex<SqliteHistoryService>>>().inner().clone();
@@ -474,8 +486,14 @@ impl SyncHooks for AppHooks {
             history.conn(),
         );
         match result {
-            Ok(reloaded) => self.reloaded.lock().unwrap().merge(reloaded),
-            Err(e) => log::warn!("settings sync: reload after pull failed: {e}"),
+            Ok(reloaded) => {
+                self.reloaded.lock().unwrap().merge(reloaded);
+                Ok(())
+            }
+            Err(e) => {
+                log::warn!("settings sync: reload after pull failed: {e}");
+                Err(e.to_string())
+            }
         }
     }
 

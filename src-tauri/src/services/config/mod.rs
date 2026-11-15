@@ -638,17 +638,28 @@ fn build_settings(config_dir: &Path, content: &str) -> Result<Settings, ConfigEr
     ensure_prompt_defaults(config_dir, &settings);
     replace_legacy_system_default(config_dir, &settings.prompt_base.system);
 
-    migrate_model_params(&mut settings);
-    sanitize_capabilities(&mut settings);
-    migrate_explicit_capabilities(&mut settings);
-    ensure_surface_defaults(&mut settings);
-
-    if outcome.seed_env_vars {
-        seed_env_vars(&mut settings);
-    }
+    apply_in_memory_steps(&mut settings, outcome.seed_env_vars);
 
     validate(&settings)?;
     Ok(settings)
+}
+
+pub fn check_settings_document(content: &str) -> Result<(), ConfigError> {
+    let outcome = parse_and_migrate(content)?;
+    let mut settings = outcome.settings;
+    apply_in_memory_steps(&mut settings, outcome.seed_env_vars);
+    validate(&settings)
+}
+
+fn apply_in_memory_steps(settings: &mut Settings, seed: bool) {
+    migrate_model_params(settings);
+    sanitize_capabilities(settings);
+    migrate_explicit_capabilities(settings);
+    ensure_surface_defaults(settings);
+
+    if seed {
+        seed_env_vars(settings);
+    }
 }
 
 fn seed_env_vars(settings: &mut Settings) {

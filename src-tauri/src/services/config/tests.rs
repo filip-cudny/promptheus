@@ -1494,3 +1494,27 @@ fn env_vars_follow_webview_providers_in_the_written_file() {
 
     assert_keys_in_order(&written, &["webview_providers", "env_vars"]);
 }
+
+#[test]
+fn check_settings_document_accepts_valid_settings() {
+    let default_json = include_str!("../../../resources/default_settings.json");
+    assert!(check_settings_document(default_json).is_ok());
+}
+
+#[test]
+fn check_settings_document_rejects_a_conflict_marker() {
+    let default_json = include_str!("../../../resources/default_settings.json");
+    let broken = format!("<<<<<<< HEAD\n{default_json}");
+    assert!(matches!(
+        check_settings_document(&broken),
+        Err(ConfigError::JsonParse(_))
+    ));
+}
+
+#[test]
+fn check_settings_document_creates_no_file() {
+    let dir = TempDir::new().unwrap();
+    let default_json = include_str!("../../../resources/default_settings.json");
+    check_settings_document(default_json).unwrap();
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+}
