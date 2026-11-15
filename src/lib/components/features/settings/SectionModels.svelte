@@ -3,6 +3,7 @@
   import { getSettingsStore } from "$lib/stores/settings.svelte";
   import { getSkillsStore } from "$lib/stores/skills.svelte";
   import { getSettingsNavigation } from "$lib/stores/settingsNavigation.svelte";
+  import { getSetupBanner } from "$lib/stores/setupBanner.svelte";
   import ModelList from "./ModelList.svelte";
   import ModelEditor from "./ModelEditor.svelte";
   import ModelAssignments from "./ModelAssignments.svelte";
@@ -11,6 +12,7 @@
 
   const store = getSettingsStore();
   const navigation = getSettingsNavigation();
+  const setup = getSetupBanner();
 
   let selectedId = $state<string | null>(null);
 
@@ -45,6 +47,11 @@
 
   function handleSelect(id: string) {
     selectedId = id;
+  }
+
+  function handleCreated(id: string, testPassed: boolean) {
+    handleSelect(id);
+    void setup.modelCreated(id, testPassed);
   }
 
   function showUse(surface: SurfaceKind) {
@@ -90,7 +97,7 @@
   <CreateModelDialog
     modelType={creatingType}
     onClose={() => (creatingType = null)}
-    onCreated={handleSelect}
+    onCreated={handleCreated}
   />
 {/if}
 

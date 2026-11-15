@@ -14,7 +14,10 @@ import {
 
 const HIGHLIGHT_MS = 2000;
 const ELEMENT_WAIT_FRAMES = 20;
-const NEW_MODEL_KEY = "models:new";
+const NEW_MODEL_TYPES = new Map<string, ModelType>([
+  ["models:new", "text"],
+  ["models:new-stt", "stt"],
+]);
 const PERSISTENT_STYLE_ID = "settings-persistent-targets";
 const PERSISTENT_TARGET_STYLE =
   "{ border-radius: var(--radius-md); outline: 2px solid var(--accent); outline-offset: 4px; background: var(--accent-bg-soft); }";
@@ -130,9 +133,10 @@ function isPersistentTarget(id: string): boolean {
 }
 
 async function navigateTo(key: string) {
-  if (key === NEW_MODEL_KEY) {
+  const newModelType = NEW_MODEL_TYPES.get(key);
+  if (newModelType) {
     activeSection = "models";
-    createModelType = "text";
+    createModelType = newModelType;
     return;
   }
   if (isSectionKey(key)) {

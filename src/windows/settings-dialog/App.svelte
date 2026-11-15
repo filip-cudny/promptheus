@@ -10,6 +10,7 @@
   import { getSettingsNavigation } from "$lib/stores/settingsNavigation.svelte";
   import SettingsContent from "$lib/components/features/settings/SettingsContent.svelte";
   import MissingEnvList from "$lib/components/features/settings/MissingEnvList.svelte";
+  import SetupBanner from "$lib/components/features/settings/SetupBanner.svelte";
   import SettingsFallbackError from "$lib/components/features/settings/SettingsFallbackError.svelte";
   import AgentPanel from "$lib/components/features/settings/agent/AgentPanel.svelte";
   import { getSettingsAgent } from "$lib/stores/settingsAgent.svelte";
@@ -70,6 +71,7 @@
 <div class="dialog-shell">
   <SettingsFallbackError />
   <MissingEnvList />
+  <SetupBanner />
   <div
     class="dialog-body"
     bind:clientWidth={bodyWidth}
