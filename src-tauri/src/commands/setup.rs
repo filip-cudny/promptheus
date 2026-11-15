@@ -78,7 +78,7 @@ pub async fn assign_setup_model(
     })?;
     if let Some(surface) = mutated.value {
         log::info!("setup model assigned to {surface:?}");
-        finish_mutation(&app, mutated.reloaded).await?;
     }
+    finish_mutation(&app, mutated.reloaded).await?;
     Ok(mutated.value)
 }

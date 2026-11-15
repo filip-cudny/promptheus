@@ -4,7 +4,6 @@ use crate::models::settings::{ModelConfig, Settings};
 use crate::services::config::SurfaceKind;
 use crate::services::env_resolve::env_ref_names;
 
-#[derive(Default)]
 pub struct SetupSession {
     active: AtomicBool,
 }
