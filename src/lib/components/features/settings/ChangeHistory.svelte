@@ -3,7 +3,9 @@
   import { ICON_SIZE } from "$lib/constants/ui";
   import Button from "$lib/components/shared/ui/Button.svelte";
   import { lineDiff } from "$lib/utils/lineDiff";
-  import { entryTitle, formatEntryTime, formatValue, targetLabel } from "$lib/utils/changeLog";
+  import { effectPathLabel, entryTitle, formatEntryTime, formatValue } from "$lib/utils/changeLog";
+  import { getSettingsCatalogStore } from "$lib/stores/settingsCatalog.svelte";
+  import { getSettingsStore } from "$lib/stores/settings.svelte";
   import {
     listChangeLog,
     onChangeLogChanged,
@@ -20,6 +22,8 @@
   let messages = $state<Record<string, string>>({});
   let busy = $state<string | null>(null);
 
+  const catalogStore = getSettingsCatalogStore();
+  const settingsStore = getSettingsStore();
   const entries = $derived(items.map((i) => i.entry));
 
   async function refresh() {
@@ -75,7 +79,7 @@
       <div class="head">
         <button type="button" class="toggle" aria-expanded={!!expanded[entry.id]} onclick={() => toggle(entry.id)}>
           {#if expanded[entry.id]}<ChevronDown size={ICON_SIZE.sm} />{:else}<ChevronRight size={ICON_SIZE.sm} />{/if}
-          <span class="title">{entryTitle(entry, entries)}</span>
+          <span class="title">{entryTitle(entry, entries, catalogStore.entries, settingsStore.models)}</span>
         </button>
         <span class="badge" class:undone={state === "undone"}>{state}</span>
         <Button icon={Undo2} disabled={busy !== null} onclick={() => undo(entry.id, false)}>Undo</Button>
@@ -100,7 +104,7 @@
             <div class="op-label">{op.label}</div>
             {#each op.effects as effect, i (i)}
               <div class="effect">
-                <code class="path">{targetLabel(effect.target)}</code>
+                <code class="path">{effectPathLabel(effect.target, catalogStore.entries, settingsStore.models)}</code>
                 {#if effect.target.type === "file"}
                   <pre class="diff">{#each lineDiff(String(effect.before ?? ""), String(effect.after ?? "")) as line}<span class="line {line.kind}">{line.kind === "added" ? "+ " : line.kind === "removed" ? "- " : "  "}{line.text}
 </span>{/each}</pre>

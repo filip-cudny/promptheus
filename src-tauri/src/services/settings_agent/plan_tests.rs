@@ -390,8 +390,8 @@ fn shortcut_operations_label_themselves() {
     let add = Operation::AddShortcut { action: "clear_context".into(), shortcut: "ctrl+f2".into() };
     let remove = Operation::RemoveShortcut { action: "open_context_menu".into(), shortcut: "ctrl+f1".into() };
 
-    assert_eq!(add.label(&settings), "Add shortcut ctrl+f2 to clear_context");
-    assert_eq!(remove.label(&settings), "Remove shortcut ctrl+f1 from open_context_menu");
+    assert_eq!(add.label(&settings), "Add shortcut ctrl+f2 to Clear context");
+    assert_eq!(remove.label(&settings), "Remove shortcut ctrl+f1 from Open context menu");
 }
 
 #[test]

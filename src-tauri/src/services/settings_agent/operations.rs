@@ -200,9 +200,11 @@ impl Operation {
             Self::DeleteWebviewProvider { id } => {
                 format!("Delete web provider {}", provider_name(settings, id))
             }
-            Self::AddShortcut { action, shortcut } => format!("Add shortcut {shortcut} to {action}"),
+            Self::AddShortcut { action, shortcut } => {
+                format!("Add shortcut {shortcut} to {}", action_label(action))
+            }
             Self::RemoveShortcut { action, shortcut } => {
-                format!("Remove shortcut {shortcut} from {action}")
+                format!("Remove shortcut {shortcut} from {}", action_label(action))
             }
             Self::AddEnvVar { name, .. } => format!("Add variable {name}"),
             Self::UpdateEnvVar { name, secret: false, .. } if is_secret_variable(settings, name) => {
@@ -234,6 +236,14 @@ fn provider_name<'a>(settings: &'a Settings, id: &'a str) -> &'a str {
         .iter()
         .find(|provider| provider.id == id)
         .map_or(id, |provider| provider.name.as_str())
+}
+
+fn action_label(action: &str) -> &str {
+    let key = format!("keymaps.{action}");
+    catalog::ENTRIES
+        .iter()
+        .find(|entry| entry.key == key)
+        .map_or(action, |entry| entry.label)
 }
 
 fn setting_label(settings: &Settings, key: &str) -> String {
