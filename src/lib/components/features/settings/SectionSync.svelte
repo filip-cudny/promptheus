@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     AlertTriangle,
+    Check,
     CheckCircle2,
     CircleSlash,
     Copy,
@@ -131,7 +132,7 @@
                     {@const repoPath = status.repo_path}
                     <Button
                       variant="ghost"
-                      icon={Copy}
+                      icon={pathCopy.confirmed ? Check : Copy}
                       onclick={() => copyPath(repoPath)}
                     >
                       {pathCopy.confirmed ? "Copied" : "Copy path"}

@@ -140,7 +140,6 @@
           bind:value={url}
           placeholder="git@github.com:you/settings.git"
           oninput={resetCheck}
-          onkeydown={(e: KeyboardEvent) => e.key === "Enter" && checkAccess()}
         />
         <Button disabled={checking || !sourceValue} onclick={checkAccess}>
           {checking ? "Checking…" : "Check access"}
@@ -160,7 +159,6 @@
           bind:value={dir}
           placeholder="~/dotfiles"
           oninput={resetCheck}
-          onkeydown={(e: KeyboardEvent) => e.key === "Enter" && checkAccess()}
         />
         <Button disabled={checking} onclick={chooseFolder}>Choose…</Button>
         <Button disabled={checking || !sourceValue} onclick={checkAccess}>
@@ -288,14 +286,6 @@
     font-size: var(--font-size-md);
     color: var(--text-primary);
     padding: var(--space-0);
-  }
-
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
   }
 
   .row {
