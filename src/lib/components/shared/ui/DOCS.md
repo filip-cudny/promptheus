@@ -130,6 +130,7 @@ For typing dynamic Lucide icon props, use `ComponentType<SvelteComponent<IconPro
 - Borderless transparent button — no border, hover adds subtle background.
 - Use `confirmIcon={Check}` for actions where the user needs visual feedback (copy, save). Omit for actions with immediate visible effect (navigate, regenerate).
 - Icon sizes are defined in `$lib/constants/ui.ts` — never hardcode pixel values.
+- Never pass a lucide icon `fill={cond ? "currentColor" : undefined}`: `Icon.svelte` spreads its rest props after its default attributes, so an `undefined` `fill` replaces lucide's `fill="none"`, the attribute is dropped and SVG paints every path black (open paths and arcs such as `RefreshCw`, `Mic`, `ArrowUp` turn into black shapes). Pass `"none"` for the unfilled case.
 - `active` marks a toggled-on button (tint of `--info`); `variant="danger"` turns the hover red; `variant="primary"` is the filled circle; `variant="muted"` and `variant="stop"` the muted circle.
 
 ### FilePathReveal

@@ -64,7 +64,7 @@
   <ActiveIcon
     size={iconSize}
     strokeWidth={variant === "primary" ? 3 : undefined}
-    fill={variant === "stop" ? "currentColor" : undefined}
+    fill={variant === "stop" ? "currentColor" : "none"}
   />
 </button>
 
