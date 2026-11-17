@@ -155,6 +155,8 @@ API keys are read from `<config directory>/.env` first; then a `.env` found in t
 
 ### Sync settings between machines
 
+The repository is optional: without it the app keeps everything in the config directory. Connect one when you want, for example, the same settings on several machines.
+
 Settings → Sync keeps `settings.json`, `prompts/` and `skills/` in a git repository of your own. Connect a remote URL or a local clone, choose a folder in it and what to sync: the entries move into that folder and the config directory links to them. The app then fetches, commits, rebases and pushes at startup, every 5 minutes and on "Sync now"; on a conflict it pauses until you resolve it in the repository. API keys (`.env`), window state, conversation history and logs are never synced. Git must reach the remote without a prompt (an SSH key in ssh-agent, or a credential helper for HTTPS).
 
 ## Development
