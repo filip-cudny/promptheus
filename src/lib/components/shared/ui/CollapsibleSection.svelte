@@ -8,12 +8,14 @@
     title,
     collapsed = $bindable(false),
     headerClass,
+    summary,
     actions,
     children,
   }: {
     title: string;
     collapsed: boolean;
     headerClass?: string;
+    summary?: Snippet;
     actions?: Snippet;
     children: Snippet;
   } = $props();
@@ -29,6 +31,9 @@
       {/if}
     </span>
     <span class="collapsible-title">{title}</span>
+    {#if summary}
+      <span class="collapsible-summary">{@render summary()}</span>
+    {/if}
     {#if actions}
       <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
         <span class="collapsible-actions" onclick={(e) => e.stopPropagation()}>
@@ -77,17 +82,27 @@
   }
 
   .collapsible-title {
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
+  .collapsible-summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
   .collapsible-actions {
     display: flex;
     gap: var(--space-2);
     flex-shrink: 0;
+    margin-left: auto;
   }
 
   .collapsible-content {

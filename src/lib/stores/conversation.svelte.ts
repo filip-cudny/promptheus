@@ -41,6 +41,7 @@ import type { ConversationNodeForExecution } from "$lib/types/ai";
 import { invoke } from "@tauri-apps/api/core";
 import { getContextItems, getLabelledContext } from "$lib/services/context";
 import type { InvocationSource } from "$lib/types/history";
+import { PASTED_TEXT_BLOCK } from "$lib/utils/contextBlocks";
 
 export async function getGlobalContext(): Promise<{
   text: string;
@@ -58,8 +59,8 @@ export async function getGlobalContext(): Promise<{
 
 export function unwrapContextBlocks(text: string): string {
   return text.replace(
-    /<pasted-text name="Text #\d+">\n([\s\S]*?)\n<\/pasted-text>(\n\n(?=<pasted-text name="Text #\d+">))?/g,
-    (_block, content: string, separator?: string) =>
+    PASTED_TEXT_BLOCK,
+    (_block, _number: string, content: string, separator?: string) =>
       separator ? `${content}\n` : content,
   );
 }

@@ -167,6 +167,14 @@ For typing dynamic Lucide icon props, use `ComponentType<SvelteComponent<IconPro
 - Uses `bind:collapsed` for two-way binding — parent controls open/closed state.
 - Header uses Lucide `ChevronRight`/`ChevronDown` icons for collapse indicator. The `actions` snippet renders on the right side and stops click propagation. `headerClass` allows conditional styling of the header (e.g., highlight when content is present).
 - Content area uses `svelte/transition` `slide` for smooth expand/collapse.
+- The optional `summary` snippet renders after the title and takes the free header width (`flex: 1`, clipped); the title keeps its own width, ellipsized when short of room, and `actions` stay at the right edge with or without a `summary`. A chip in the snippet stops its click (`ContextItemChip` does), so only the other header clicks toggle.
+
+### ContextItemChip
+
+- One context item in form E2: kind marker first, then `#n`, text chips then the text. Image: 16 px square thumbnail (`object-fit: cover`, `--radius-md`) from `src` (a data URI) then `#n`. Text: lucide `Type` icon (12 px) then `#n` then the text on one line, ellipsized at the end; without `number` the icon then the text only.
+- Props: `kind` (`"image" | "text"`), `number`, `text`, `src`, `title`, `icon` (replaces `Type`, e.g. `Check` after a copy), `maxWidth` (text chips only), `onclick` (renders a `<button>`, stops propagation; without it a `<span>`), `onremove` with `removeLabel` (the `X` button is rendered only when `onremove` is given; it stops propagation).
+- Look as the mockup `.mini`: 20 px high, 1 px `--border-strong` border, `--radius-lg`, 11 px, weight 500, hover border `--accent-border`.
+- Used by the chat Context header (`conversation-dialog/ContextSection.svelte`). Not used by the composer and `ContextEditor` (they keep `ImageChipBar` / `AttachmentChip`); the recording pill has its own markup.
 
 ### ImageChipBar
 

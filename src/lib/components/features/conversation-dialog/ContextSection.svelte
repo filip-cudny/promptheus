@@ -3,8 +3,11 @@
   import CollapsibleSection from "$lib/components/shared/ui/CollapsibleSection.svelte";
   import ActionIconButton from "$lib/components/shared/ui/ActionIconButton.svelte";
   import Button from "$lib/components/shared/ui/Button.svelte";
+  import ContextItemChip from "$lib/components/shared/ui/ContextItemChip.svelte";
   import ContextEditor from "$lib/components/shared/widgets/ContextEditor.svelte";
   import { appendContext, appendContextImage, clearContext } from "$lib/services/context";
+  import { openImagePreview } from "$lib/services/windowPreviews";
+  import { parseContextTextItems } from "$lib/utils/contextBlocks";
   import { Save, Check, X, Trash2 } from "lucide-svelte";
   import { getGlobalContext, unwrapContextBlocks, type createConversationStore } from "$lib/stores/conversation.svelte";
   import type { ConversationImage } from "$lib/types/conversation";
@@ -23,6 +26,10 @@
     onClose?: () => void;
   } = $props();
 
+  const MAX_HEADER_CHIPS = 3;
+  const TEXT_CHIP_TITLE_CHARS = 300;
+  const TEXT_CHIP_MAX_WIDTH = "180px";
+
   let collapsed = $state(initialCollapsed);
   let saving = $state(false);
   let confirming = $state<"close" | "clear" | false>(false);
@@ -31,6 +38,13 @@
   let localImages = $state<ConversationImage[]>(store.contextImages);
 
   let hasContent = $derived(localText.trim().length > 0 || localImages.length > 0);
+  let headerChips = $derived.by(() => {
+    const images = localImages.map((image, idx) => ({ kind: "image" as const, number: image.number ?? idx + 1, image }));
+    const texts = parseContextTextItems(localText).map((item) => ({ kind: "text" as const, ...item }));
+    return [...images, ...texts];
+  });
+  let visibleChips = $derived(headerChips.slice(0, MAX_HEADER_CHIPS));
+  let hiddenChipCount = $derived(headerChips.length - visibleChips.length);
   let contextHeaderClass = $derived(collapsed && hasContent ? "context-has-content" : "");
 
   $effect(() => {
@@ -112,25 +126,52 @@
     </div>
   {:else}
     <CollapsibleSection title="Context" bind:collapsed headerClass={contextHeaderClass}>
+      {#snippet summary()}
+        {#if collapsed && hasContent}
+          {#each visibleChips as chip}
+            {#if chip.kind === "image"}
+              <ContextItemChip
+                kind="image"
+                number={chip.number}
+                src={`data:${chip.image.media_type};base64,${chip.image.data}`}
+                title="Open image #{chip.number}"
+                onclick={() => openImagePreview(chip.image.data, chip.image.media_type)}
+              />
+            {:else}
+              <ContextItemChip
+                kind="text"
+                number={chip.number}
+                text={chip.text}
+                maxWidth={TEXT_CHIP_MAX_WIDTH}
+                title={chip.text.slice(0, TEXT_CHIP_TITLE_CHARS)}
+                onclick={() => (collapsed = false)}
+              />
+            {/if}
+          {/each}
+          {#if hiddenChipCount > 0}
+            <span class="more-chips">+{hiddenChipCount}</span>
+          {/if}
+        {/if}
+      {/snippet}
       {#snippet actions()}
         <ActionIconButton
           icon={Trash2}
           variant="danger"
           onclick={requestClear}
-          label="Clear context"
+          label="Clear context in this conversation (global context unchanged)"
           disabled={contextDisabled || !hasContent}
         />
         <ActionIconButton
           icon={Save}
           confirmIcon={Check}
           onclick={saveContext}
-          label="Save context globally"
+          label="Replace the global context with this conversation's context"
           disabled={contextDisabled || saving}
         />
         <ActionIconButton
           icon={X}
           onclick={requestClose}
-          label="Close context"
+          label="Remove context from this conversation and hide it"
         />
       {/snippet}
       <ContextEditor
@@ -180,6 +221,14 @@
     padding: var(--space-3) var(--space-5) var(--space-4);
     max-height: 35vh;
     overflow-y: auto;
+  }
+
+  .more-chips {
+    flex: none;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-muted);
+    white-space: nowrap;
   }
 
   .confirm-bar {
