@@ -140,12 +140,15 @@
 
   let recentListOpen = $state(false);
   let previousRecentListOpen = false;
+  let handledOpenTrigger = menu.getOpenTrigger();
 
   $effect(() => {
-    void menu.getOpenTrigger();
+    const openTrigger = menu.getOpenTrigger();
     if (menuVisible && menuItems.length > 0) {
       untrack(() => panels.closeAll());
-      if (untrack(() => recentListOpen)) {
+      const isNewOpen = openTrigger !== handledOpenTrigger;
+      handledOpenTrigger = openTrigger;
+      if (!isNewOpen && untrack(() => recentListOpen)) {
         void positioning.resizeKeepingTop();
       } else {
         void positioning.triggerReposition();
