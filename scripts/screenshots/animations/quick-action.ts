@@ -2,7 +2,7 @@ import type { Animation, Step } from "../host";
 
 const original = "Wir treffen uns morgen um neun am Bahnhof.";
 const translation = "We are meeting tomorrow at nine at the station.";
-const modelName = "Lumen 3 Mini";
+const modelName = "GPT-6";
 
 export const backdrop = `
 <style>

@@ -22,7 +22,9 @@
 ## Animations
 
 - `quick-action`: text selected in an editor, `Ctrl+F1` opens the context menu, prompt 2 runs, a toast reports the result, `Ctrl+V` pastes it.
-- `dictation`: an image set as context, `Shift+F1` starts the recording pill, the transcript goes to the chat, which shows the answer.
+- `dictation`: `Shift+F1` starts the recording pill (rendered as macOS, the only platform whose webview pill has the Screenshot button), a drawn pointer clicks Screenshot and drags a rectangle over a code error in the GNOME extension's area selector look (stage dimmed `rgba(0, 0, 0, 0.4)`, crosshair, frame of `extension.js` `_selectCaptureArea`), the pill returns with "Image #1", the pointer clicks stop + chat and the chat streams the answer.
+
+Both fixtures name the model `GPT-6`.
 
 `pnpm screenshots quick-action dictation` renders only them; with no name the run also renders the PNG views, so it needs `ffmpeg` too.
 
@@ -32,7 +34,7 @@
 - The iframe views (`quick-action-menu`, `notification`, `dictation-pill`, `dictation-chat`) are registered only in `VIEWS` of `mocks.ts`; the canvas size of each animation is in `ANIMATIONS` of `run.mjs`.
 - One capture loop in `animate.mjs` takes PNG frames continuously over the whole timeline at ≤ 15 fps (`MAX_FPS`) and encodes them with `ffmpeg` as lossy animated WebP (quality 75) that loops forever.
 - `--steps <dir>` also writes the first frame captured after `shownAtMs` of each step as `<dir>/<name>-<n>.png` (n from 1), to look at the steps.
-- After each file the run prints frames, width, duration and loop count, read from the WebP chunks. The width is the canvas width × 2 (device scale factor), so ≤ 1600 px for the 800 px canvases. The targets 8–12 s and ≤ 3 MB are not checked by the run; check the printed duration and `ls -l`.
+- After each file the run prints frames, width, duration and loop count, read from the WebP chunks. The width is the canvas width × 2 (device scale factor), so ≤ 1600 px for the 800 px canvases. The targets (quick-action 8–12 s, dictation ≤ 14 s, ≤ 3 MB) are not checked by the run; check the printed duration and `ls -l`.
 
 ## Failures
 
@@ -45,7 +47,8 @@ The run exits non-zero, naming the view and the cause, on:
 
 ## Adding a view
 
-1. `views/<view>.ts` exports `label` (the Tauri window label), `fixture` (command → value, or function of the invoke args), optionally `globals` (window properties the backend injects) and `show()` (emits the show or state events of an event-driven window through `@tauri-apps/api/event`, or waits for a transient state such as a highlight to end).
+1. `views/<view>.ts` exports `label` (the Tauri window label), `fixture` (command → value, or function of the invoke args), optionally `globals` (window properties the backend injects), `platform` (the `navigator.platform` the window sees, e.g. `MacIntel` for macOS-only UI behind `isMac`) and `show()` (emits the show or state events of an event-driven window through `@tauri-apps/api/event`, or waits for a transient state such as a highlight to end).
+   A view imports app modules (`$lib/…`) only dynamically, inside `show()`: `mocks.ts` imports every view in every window, so a static import evaluates the app module before `mocks.ts` sets `platform` (and before `mockIPC`); e.g. `settingsNavigation` reaches `$lib/utils/platform`, so a static import of it fixes `isMac` to `false` in every window.
 2. Register it in `VIEWS` of `mocks.ts` and of `run.mjs`: HTML page, window size in CSS pixels, optionally `clip` (selector of a transparent window's visible part), `type` (text typed into the focused field after `show()`), `backdrop` (page background behind a transparent window) with `margin` (CSS pixels of backdrop around the window).
 3. Run `pnpm screenshots <view>` until it exits 0, and look at the PNG.
 

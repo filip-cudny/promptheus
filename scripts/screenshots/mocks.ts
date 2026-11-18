@@ -17,6 +17,7 @@ interface View {
   label: string;
   fixture: Fixture;
   globals?: Record<string, unknown>;
+  platform?: string;
   show?: () => Promise<void>;
 }
 
@@ -40,6 +41,7 @@ if (!view) throw new Error(`screenshot view "${name}" is not registered in mocks
 
 mockWindows(view.label);
 Object.assign(window, view.globals);
+if (view.platform) Object.defineProperty(navigator, "platform", { value: view.platform });
 mockIPC(
   async (cmd, args) => {
     if (cmd.startsWith("plugin:log|")) return null;

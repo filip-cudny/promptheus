@@ -45,7 +45,7 @@ The chat window also hosts the web apps of AI providers, such as ChatGPT and Cla
 ### Speech-to-text dictation
 
 <p>
-  <img src="docs/screenshots/dictation.webp" alt="Dictation: an image set as context, the recording pill while recording and the chat window with the answer" width="800">
+  <img src="docs/screenshots/dictation.webp" alt="Dictation: Shift+F1 starts the recording pill, a click on its Screenshot button and a dragged rectangle over a code error add Image #1, a click on stop and chat sends the transcript with the image to the chat window, which streams the answer" width="800">
 </p>
 
 `Shift+F1` starts and stops a recording anywhere. The recording pill shows the waveform and timer, pauses or cancels, and picks where the transcript goes: plain dictation copied to the clipboard, a prompt that runs on it, the chat, or the ChatGPT or Claude tab (or Claude Desktop). Transcription uses OpenAI Whisper or ElevenLabs; a failed transcription keeps the audio for a retry. On GNOME Wayland the pill is drawn by the bundled GNOME Shell extension.

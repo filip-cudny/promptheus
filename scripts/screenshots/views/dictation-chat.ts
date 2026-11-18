@@ -36,7 +36,7 @@ function gate(): Gate {
   return { promise, open };
 }
 
-const chatModel = { display_name: "Lumen 3 Mini", model: "lumen-3-mini" };
+const chatModel = { display_name: "GPT-6", model: "gpt-6" };
 const settings = {
   ...appSettings,
   models: appSettings.models.map((m) => (m.id === appSettings.surfaces.chat.generation.model_id ? { ...m, ...chatModel } : m)),

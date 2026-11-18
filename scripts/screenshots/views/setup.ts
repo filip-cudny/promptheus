@@ -1,4 +1,3 @@
-import { getSettingsNavigation } from "$lib/stores/settingsNavigation.svelte";
 import type { Fixture } from "../mocks";
 import { appSettings, fixture as settingsFixture } from "./settings";
 
@@ -41,6 +40,7 @@ async function until(condition: () => boolean, what: string) {
 }
 
 export async function show() {
+  const { getSettingsNavigation } = await import("$lib/stores/settingsNavigation.svelte");
   const navigation = getSettingsNavigation();
   await until(() => navigation.highlightedSection !== null, "the banner did not open its section");
   await until(() => navigation.highlightedSection === null, "the section highlight did not fade");

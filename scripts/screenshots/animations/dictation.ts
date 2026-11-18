@@ -3,6 +3,8 @@ import type { Animation, Stage, Step } from "../host";
 const RECORDING_START_MS = 1000;
 const LEVEL_TICK_MS = 120;
 const POINTER_TRAVEL_MS = 700;
+const PRESS_MS = 150;
+const SELECTION = { left: 56, top: 64, right: 470, bottom: 410 };
 
 export const backdrop = `
 <style>
@@ -16,8 +18,11 @@ export const backdrop = `
   .editor-code .bad { text-decoration: underline wavy #ff6b81; }
   .editor-error { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 30px 20px; background: #3a1f2b; color: #ff9aa8; font: 16px/1.6 var(--font-mono, monospace); }
   .chat-shadow { position: absolute; left: 110px; top: 30px; width: 580px; height: 500px; border-radius: 10px; box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6); visibility: hidden; }
+  #capture-overlay { position: absolute; inset: 0; z-index: 5; background-color: rgba(0, 0, 0, 0.4); }
+  #capture-frame { position: absolute; box-sizing: border-box; width: 0; height: 0; background-color: rgba(255, 255, 255, 0.15); border: 1px solid white; visibility: hidden; transition: width ${POINTER_TRAVEL_MS}ms ease-in-out, height ${POINTER_TRAVEL_MS}ms ease-in-out; }
   #pointer { position: absolute; z-index: 10; left: 600px; top: 360px; width: 20px; height: 28px; background: #fff; clip-path: polygon(0 0, 0 82%, 28% 64%, 48% 100%, 64% 92%, 45% 58%, 82% 58%); opacity: 0; transition: left ${POINTER_TRAVEL_MS}ms ease-in-out, top ${POINTER_TRAVEL_MS}ms ease-in-out, opacity 200ms, transform 120ms; transform-origin: 0 0; }
   #pointer.pressed { transform: scale(0.8); }
+  #pointer.crosshair { width: 23px; height: 23px; margin: -11px 0 0 -11px; clip-path: none; background: linear-gradient(#fff, #fff) center / 1px 100% no-repeat, linear-gradient(#fff, #fff) center / 100% 1px no-repeat; filter: drop-shadow(0 0 1px #000); }
 </style>
 <div class="desktop"></div>
 <div class="editor">
@@ -32,10 +37,10 @@ export const backdrop = `
   <div class="editor-error">CartError: total is undefined<br />    at cartTotal (cart.js:2)</div>
 </div>
 <div class="chat-shadow"></div>
+<div id="capture-overlay" hidden><div id="capture-frame"></div></div>
 <div id="pointer"></div>`;
 
 export const windows: Animation["windows"] = {
-  toast: { page: "notification.html", view: "notification", left: 440, top: 24, width: 340, height: 140 },
   pill: { page: "recording-widget.html", view: "dictation-pill", left: 268, top: 436, width: 264, height: 104 },
   chat: { page: "conversation-dialog.html", view: "dictation-chat", left: 110, top: 30, width: 580, height: 500 },
 };
@@ -65,42 +70,42 @@ async function runRecording(stage: Stage) {
   }
 }
 
-function stopChatButton(stage: Stage) {
+function pillButton(stage: Stage, selector: string) {
   const pill = stage.frameWindow("pill");
-  const button = pill.document.querySelector<HTMLButtonElement>("button.secondary")!;
+  const button = pill.document.querySelector<HTMLButtonElement>(selector)!;
   const rect = button.getBoundingClientRect();
   const origin = pill.frameElement!.getBoundingClientRect();
   const center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
   return { button, center, onStage: { x: origin.x + center.x, y: origin.y + center.y } };
 }
 
-function pointer(stage: Stage) {
-  return stage.root.querySelector<HTMLElement>("#pointer")!;
+function element(stage: Stage, id: string) {
+  return stage.root.querySelector<HTMLElement>(`#${id}`)!;
 }
+
+function movePointer(stage: Stage, x: number, y: number) {
+  const arrow = element(stage, "pointer");
+  arrow.style.opacity = "1";
+  arrow.style.left = `${x}px`;
+  arrow.style.top = `${y}px`;
+}
+
+async function clickPillButton(stage: Stage, selector: string) {
+  const { button, center } = pillButton(stage, selector);
+  await emitIn(stage, "pill", "recording-widget-pointer", center);
+  element(stage, "pointer").classList.add("pressed");
+  await stage.sleep(PRESS_MS);
+  button.click();
+}
+
+const SCREENSHOT_BUTTON = 'button[aria-label="Screenshot"]';
+const STOP_CHAT_BUTTON = "button.secondary";
 
 export const steps: Step[] = [
   {
-    caption: "Ctrl+F3",
-    shownAtMs: 700,
-    durationMs: 1400,
-    actions: [
-      {
-        atMs: 150,
-        run: async (stage) => {
-          const toast = stage.frameWindow("toast");
-          toast.pendingNotifications = [
-            { id: "context-set", level: "success", title: "Context set", message: null, monochromatic: false, action: null },
-          ];
-          stage.setVisible("toast", true);
-          await (toast.drainPending as () => Promise<void>)();
-        },
-      },
-    ],
-  },
-  {
     caption: "Shift+F1",
-    shownAtMs: 1200,
-    durationMs: 2100,
+    shownAtMs: 1000,
+    durationMs: 1400,
     actions: [
       {
         atMs: 0,
@@ -110,7 +115,88 @@ export const steps: Step[] = [
           await runRecording(stage);
         },
       },
-      { atMs: 600, run: (stage) => stage.setVisible("toast", false) },
+    ],
+  },
+  {
+    caption: null,
+    shownAtMs: 900,
+    durationMs: 1450,
+    actions: [
+      {
+        atMs: 0,
+        run: (stage) => {
+          const { onStage } = pillButton(stage, SCREENSHOT_BUTTON);
+          movePointer(stage, onStage.x, onStage.y);
+        },
+      },
+      {
+        atMs: 800,
+        run: async (stage) => {
+          await clickPillButton(stage, SCREENSHOT_BUTTON);
+          element(stage, "pointer").classList.remove("pressed");
+        },
+      },
+      {
+        atMs: 1250,
+        run: async (stage) => {
+          await emitIn(stage, "pill", "recording-widget-pointer", null);
+          stage.setVisible("pill", false);
+        },
+      },
+    ],
+  },
+  {
+    caption: null,
+    shownAtMs: 1700,
+    durationMs: 2200,
+    actions: [
+      {
+        atMs: 0,
+        run: (stage) => {
+          element(stage, "capture-overlay").hidden = false;
+          element(stage, "pointer").classList.add("crosshair");
+          movePointer(stage, SELECTION.left, SELECTION.top);
+        },
+      },
+      {
+        atMs: 800,
+        run: (stage) => {
+          const frame = element(stage, "capture-frame");
+          frame.style.left = `${SELECTION.left}px`;
+          frame.style.top = `${SELECTION.top}px`;
+          frame.style.visibility = "visible";
+        },
+      },
+      {
+        atMs: 850,
+        run: (stage) => {
+          const frame = element(stage, "capture-frame");
+          frame.style.width = `${SELECTION.right - SELECTION.left}px`;
+          frame.style.height = `${SELECTION.bottom - SELECTION.top}px`;
+          movePointer(stage, SELECTION.right, SELECTION.bottom);
+        },
+      },
+      {
+        atMs: 2050,
+        run: (stage) => {
+          element(stage, "capture-overlay").hidden = true;
+          element(stage, "pointer").classList.remove("crosshair");
+        },
+      },
+    ],
+  },
+  {
+    caption: null,
+    shownAtMs: 500,
+    durationMs: 1000,
+    actions: [
+      {
+        atMs: 100,
+        run: async (stage) => {
+          await (stage.frameWindow("pill").addImage as () => Promise<void>)();
+          stage.setVisible("pill", true);
+        },
+      },
     ],
   },
   {
@@ -121,21 +207,14 @@ export const steps: Step[] = [
       {
         atMs: 0,
         run: (stage) => {
-          const { onStage } = stopChatButton(stage);
-          const arrow = pointer(stage);
-          arrow.style.opacity = "1";
-          arrow.style.left = `${onStage.x}px`;
-          arrow.style.top = `${onStage.y}px`;
+          const { onStage } = pillButton(stage, STOP_CHAT_BUTTON);
+          movePointer(stage, onStage.x, onStage.y);
         },
       },
       {
         atMs: 800,
         run: async (stage) => {
-          const { button, center } = stopChatButton(stage);
-          await emitIn(stage, "pill", "recording-widget-pointer", center);
-          pointer(stage).classList.add("pressed");
-          await stage.sleep(150);
-          button.click();
+          await clickPillButton(stage, STOP_CHAT_BUTTON);
           recording = false;
           await (stage.frameWindow("pill").lockTarget as () => Promise<void>)();
           await emitIn(stage, "pill", "recording-widget-state", {
@@ -144,14 +223,14 @@ export const steps: Step[] = [
             elapsedMs: 0,
             monochromatic: false,
           });
-          pointer(stage).classList.remove("pressed");
+          element(stage, "pointer").classList.remove("pressed");
         },
       },
       {
         atMs: 1900,
         run: (stage) => {
           stage.setVisible("pill", false);
-          pointer(stage).style.opacity = "0";
+          element(stage, "pointer").style.opacity = "0";
         },
       },
     ],
