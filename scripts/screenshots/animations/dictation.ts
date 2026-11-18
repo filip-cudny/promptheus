@@ -68,7 +68,7 @@ export const backdrop = `
 <div id="pointer"></div>`;
 
 export const windows: Animation["windows"] = {
-  pill: { page: "recording-widget.html", view: "dictation-pill", left: 268, top: 436, width: 264, height: 104 },
+  pill: { page: "recording-widget.html", view: "dictation-pill", left: 268, top: 436, width: 264, height: 106 },
   chat: { page: "conversation-dialog.html", view: "dictation-chat", left: 110, top: 30, width: 580, height: 500 },
 };
 

@@ -11,7 +11,7 @@ use image::ImageFormat;
 pub const DIR_NAME: &str = "pill-previews";
 const MAX_WIDTH: u32 = 480;
 const MAX_HEIGHT: u32 = 320;
-const THUMBNAIL_SIZE: u32 = 32;
+const THUMBNAIL_SIZE: u32 = 40;
 
 pub fn preview_file_name(data: &str) -> String {
     let mut hasher = DefaultHasher::new();
@@ -174,12 +174,12 @@ mod tests {
     }
 
     #[test]
-    fn a_png_thumbnail_is_a_32_px_square_data_uri() {
+    fn a_png_thumbnail_is_a_40_px_square_data_uri() {
         let uri = thumbnail_data_uri(&png_base64(100, 40, 1), "image/png").unwrap();
         let encoded = uri.strip_prefix("data:image/png;base64,").unwrap();
         let bytes = base64::engine::general_purpose::STANDARD.decode(encoded).unwrap();
         let thumbnail = image::load_from_memory_with_format(&bytes, ImageFormat::Png).unwrap();
-        assert_eq!((thumbnail.width(), thumbnail.height()), (32, 32));
+        assert_eq!((thumbnail.width(), thumbnail.height()), (40, 40));
     }
 
     #[test]

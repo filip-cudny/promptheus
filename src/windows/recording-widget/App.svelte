@@ -67,7 +67,7 @@
   const PILL_WIDTH = 264;
   const PILL_HEIGHT = 72;
   const MAX_ITEM_ROWS = 3;
-  const ITEM_ROW_HEIGHT = 22;
+  const ITEM_ROW_HEIGHT = 24;
   const ITEM_ROW_GAP = 4;
   const ITEMS_ROW_PADDING = 10;
   const PREVIEW_MAX_HEIGHT = 160;
@@ -83,6 +83,8 @@
   const RADIUS = 16;
   const PADDING_X = 14;
   const CHIP_GAP = 4;
+  const IMAGE_CHIP_GAP = 5;
+  const IMAGE_COLUMNS = 3;
   const DROPDOWN_ROW_HEIGHT = 28;
   const DROPDOWN_PADDING = 4;
   const DROPDOWN_SEPARATOR_HEIGHT = 9;
@@ -137,6 +139,8 @@
   let dropdownOpen = $state(false);
   let overlayUp = $state(false);
   let previewContent = $state<PreviewContent | null>(null);
+  let previewElement = $state<HTMLElement>();
+  let previewOverflows = $state(false);
   let tooltip = $state<{ text: string; centerX: number } | null>(null);
   let hoveredIndex: number | null = null;
   let hoveredButton: HTMLButtonElement | null = null;
@@ -161,7 +165,12 @@
 
   const interactive = $derived(!model.targetLocked && widgetState !== "done");
   const hasItems = $derived(model.items.length > 0);
-  const imageItems = $derived(model.items.filter((item) => item.kind === "image"));
+  const imageLines = $derived.by(() => {
+    const images = model.items.filter((item) => item.kind === "image");
+    return Array.from({ length: Math.ceil(images.length / IMAGE_COLUMNS) }, (_, line) =>
+      images.slice(line * IMAGE_COLUMNS, (line + 1) * IMAGE_COLUMNS),
+    );
+  });
   const textItems = $derived(model.items.filter((item) => item.kind === "text"));
   const pillHeight = $derived(PILL_HEIGHT + itemsHeight(model.itemRows));
   const separatorIndex = $derived(dropdownSeparatorIndex(model.targets));
@@ -409,6 +418,13 @@
   });
 
   $effect(() => {
+    previewOverflows =
+      previewContent?.kind === "text" &&
+      !!previewElement &&
+      previewElement.scrollHeight > previewElement.clientHeight;
+  });
+
+  $effect(() => {
     if (interactive) return;
     tooltipTarget = null;
     hideTooltip();
@@ -465,16 +481,20 @@
   <div class="pill" class:mac={isMac} style:height="{pillHeight}px" style:padding="0 {PADDING_X}px" data-tauri-drag-region>
     {#if hasItems}
       <div class="items" style:height="{itemsHeight(model.itemRows)}px" style:gap="{ITEM_ROW_GAP}px" data-tauri-drag-region>
-        {#each imageItems as item (item.index)}
-          <span class="chip image" style:gap="{CHIP_GAP}px" data-item-index={item.index}>
-            {#if item.thumbnail}
-              <span class="thumb"><img src={item.thumbnail} alt="" /></span>
-            {:else}
-              <ImageIcon size={12} />
-            {/if}
-            <span class="chip-number">{item.label}</span>
-            {@render removeButton(item)}
-          </span>
+        {#each imageLines as line}
+          <div class="image-line" style:gap="{ITEM_ROW_GAP}px" data-tauri-drag-region>
+            {#each line as item (item.index)}
+              <span class="chip image" style:gap="{IMAGE_CHIP_GAP}px" data-item-index={item.index}>
+                {#if item.thumbnail}
+                  <span class="thumb"><img src={item.thumbnail} alt="" /></span>
+                {:else}
+                  <ImageIcon size={12} />
+                {/if}
+                <span class="chip-number">{item.label}</span>
+                {@render removeButton(item)}
+              </span>
+            {/each}
+          </div>
         {/each}
         {#each textItems as item (item.index)}
           <span class="chip text" style:gap="{CHIP_GAP}px" data-item-index={item.index}>
@@ -641,8 +661,10 @@
   {/if}
   {#if previewContent}
     <div
+      bind:this={previewElement}
       class="preview"
       class:image={previewContent.kind === "image"}
+      class:faded={previewOverflows}
       style:max-height="{PREVIEW_MAX_HEIGHT}px"
       style:margin-top={overlayUp ? undefined : `${PREVIEW_GAP}px`}
       style:margin-bottom={overlayUp ? `${PREVIEW_GAP}px` : undefined}
@@ -724,7 +746,7 @@
 
   .items {
     display: grid;
-    grid-template-columns: repeat(3, 76px);
+    grid-template-columns: minmax(0, 1fr);
     align-content: start;
     box-sizing: border-box;
     padding: 5px 0;
@@ -734,6 +756,10 @@
 
   .items::-webkit-scrollbar {
     display: none;
+  }
+
+  .image-line {
+    display: flex;
   }
 
   .preview,
@@ -748,9 +774,20 @@
   }
 
   .preview {
+    position: relative;
     overflow: hidden;
     padding: 8px;
     white-space: pre-wrap;
+  }
+
+  .preview.faded::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 36px;
+    background: linear-gradient(transparent, var(--surface-floating-popover));
   }
 
   .tooltip {
@@ -777,21 +814,17 @@
   .chip {
     display: flex;
     align-items: center;
-    height: 22px;
+    height: 24px;
     min-width: 0;
     padding: 0 6px;
-    border-radius: 11px;
+    border-radius: 12px;
     background: rgba(255, 255, 255, 0.12);
     font-size: 11px;
     white-space: nowrap;
   }
 
   .chip.image {
-    padding: 0 4px 0 3px;
-  }
-
-  .chip.text {
-    grid-column: 1 / -1;
+    padding: 0 4px 0 2px;
   }
 
   .thumb {
@@ -799,9 +832,9 @@
     align-items: center;
     justify-content: center;
     flex: none;
-    width: 16px;
-    height: 16px;
-    border-radius: 4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
     overflow: hidden;
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
   }
@@ -820,10 +853,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: #929294;
-  }
-
-  .chip.image .chip-number {
-    flex: 1;
+    font-size: 11.5px;
   }
 
   .chip-text {
