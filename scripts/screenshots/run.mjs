@@ -22,7 +22,7 @@ const VIEWS = {
   conversation: { page: "conversation-dialog.html", width: 700, height: 800 },
   palette: { page: "palette.html", width: 520, height: 400, clip: ".palette-modal" },
   history: { page: "history-dialog.html", width: 600, height: 500, type: "search" },
-  setup: { page: "settings-dialog.html", width: 960, height: 640 },
+  setup: { page: "settings-dialog.html", width: 960, height: 680 },
   "recording-pill": {
     page: "recording-widget.html",
     width: 264,
