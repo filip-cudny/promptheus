@@ -46,6 +46,7 @@
     kind: "text" | "image";
     label: string;
     preview: string;
+    thumbnail?: string;
   }
 
   type PopupKind = keyof typeof POPUP_COMMANDS;
@@ -160,6 +161,8 @@
 
   const interactive = $derived(!model.targetLocked && widgetState !== "done");
   const hasItems = $derived(model.items.length > 0);
+  const imageItems = $derived(model.items.filter((item) => item.kind === "image"));
+  const textItems = $derived(model.items.filter((item) => item.kind === "text"));
   const pillHeight = $derived(PILL_HEIGHT + itemsHeight(model.itemRows));
   const separatorIndex = $derived(dropdownSeparatorIndex(model.targets));
   const hasSeparator = $derived(separatorIndex >= 0);
@@ -173,6 +176,10 @@
   function dropdownSeparatorIndex(targets: { id: string }[]): number {
     const lastWebview = targets.findLastIndex((target) => target.id.startsWith("webview:"));
     return lastWebview >= 0 && lastWebview < targets.length - 1 ? lastWebview : -1;
+  }
+
+  function chipText(preview: string): string {
+    return preview.replace(/\s+/g, " ").trim();
   }
 
   function itemsHeight(rows: number): number {
@@ -440,25 +447,39 @@
   });
 </script>
 
+{#snippet removeButton(item: PillItem)}
+  {#if !model.targetLocked}
+    <button
+      type="button"
+      class="chip-remove"
+      tabindex="-1"
+      aria-label="Remove {item.label}"
+      onclick={() => run("remove_recording_widget_item", { index: item.index, contextVersion: model.contextVersion })}
+    >
+      <X size={12} />
+    </button>
+  {/if}
+{/snippet}
+
 <div class="root" class:up={overlayUp} style:--radius="{RADIUS}px">
   <div class="pill" class:mac={isMac} style:height="{pillHeight}px" style:padding="0 {PADDING_X}px" data-tauri-drag-region>
     {#if hasItems}
       <div class="items" style:height="{itemsHeight(model.itemRows)}px" style:gap="{ITEM_ROW_GAP}px" data-tauri-drag-region>
-        {#each model.items as item (item.index)}
-          <span class="chip" style:gap="{CHIP_GAP}px" data-item-index={item.index}>
-            {#if item.kind === "image"}<ImageIcon size={12} />{:else}<Type size={12} />{/if}
-            <span class="chip-label">{item.label}</span>
-            {#if !model.targetLocked}
-              <button
-                type="button"
-                class="chip-remove"
-                tabindex="-1"
-                aria-label="Remove {item.label}"
-                onclick={() => run("remove_recording_widget_item", { index: item.index, contextVersion: model.contextVersion })}
-              >
-                <X size={12} />
-              </button>
-            {/if}
+        {#each imageItems as item (item.index)}
+          <span class="chip image" style:gap="{CHIP_GAP}px" data-item-index={item.index}>
+            <span class="thumb" class:ring={item.thumbnail}>
+              {#if item.thumbnail}<img src={item.thumbnail} alt="" />{:else}<ImageIcon size={12} />{/if}
+            </span>
+            <span class="chip-number">{item.label}</span>
+            {@render removeButton(item)}
+          </span>
+        {/each}
+        {#each textItems as item (item.index)}
+          <span class="chip text" style:gap="{CHIP_GAP}px" data-item-index={item.index}>
+            <Type size={12} />
+            <span class="chip-number">{item.label}</span>
+            <span class="chip-text">{chipText(item.preview)}</span>
+            {@render removeButton(item)}
           </span>
         {/each}
       </div>
@@ -701,7 +722,7 @@
 
   .items {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 76px);
     align-content: start;
     box-sizing: border-box;
     padding: 5px 0;
@@ -763,12 +784,56 @@
     white-space: nowrap;
   }
 
-  .chip-label {
+  .chip.image {
+    padding: 0 4px 0 3px;
+  }
+
+  .chip.text {
+    grid-column: 1 / -1;
+  }
+
+  .thumb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .thumb.ring {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+  }
+
+  .thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .chip-number {
+    flex: none;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #929294;
+  }
+
+  .chip.image .chip-number {
+    flex: 1;
+  }
+
+  .chip-text {
     flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: #e5e5e7;
   }
 
   .chip-remove {

@@ -34,10 +34,15 @@ const WIDGET_RADIUS = 16;
 const WIDGET_ITEM_ROW_HEIGHT = 22;
 const WIDGET_ITEM_ROW_GAP = 4;
 const WIDGET_ITEMS_ROW_PADDING = 10;
-const WIDGET_ITEM_COLUMNS = 2;
 const WIDGET_PADDING_X = 14;
-const WIDGET_CHIP_WIDTH = (WIDGET_WIDTH - 2 * WIDGET_PADDING_X - (WIDGET_ITEM_COLUMNS - 1) * WIDGET_ITEM_ROW_GAP) / WIDGET_ITEM_COLUMNS;
-const WIDGET_CHIP_PADDING_X = 6;
+const WIDGET_IMAGE_COLUMNS = 3;
+const WIDGET_IMAGE_CHIP_WIDTH = 76;
+const WIDGET_TEXT_CHIP_WIDTH = WIDGET_WIDTH - 2 * WIDGET_PADDING_X;
+const WIDGET_CHIP_PADDING_LEFT = 6;
+const WIDGET_CHIP_PADDING_RIGHT = 6;
+const WIDGET_IMAGE_CHIP_PADDING_LEFT = 3;
+const WIDGET_IMAGE_CHIP_PADDING_RIGHT = 4;
+const WIDGET_THUMB_SIZE = 16;
 const WIDGET_PREVIEW_MAX_HEIGHT = 160;
 const WIDGET_PREVIEW_GAP = 6;
 const WIDGET_PREVIEW_DELAY_MS = 300;
@@ -1568,14 +1573,19 @@ export default class PromptheusExtension extends Extension {
         widget.itemsRow.visible = items.length > 0;
         widget.itemsRow.style = `height: ${widgetItemsContentHeight(itemRows)}px; padding: ${WIDGET_ITEMS_ROW_PADDING / 2}px ${WIDGET_PADDING_X}px;`;
         const grid = new St.BoxLayout({vertical: true, style: `spacing: ${WIDGET_ITEM_ROW_GAP}px;`});
-        let line = null;
-        items.forEach(([index, kind, label, preview, imagePath], position) => {
-            if (position % WIDGET_ITEM_COLUMNS === 0) {
-                line = new St.BoxLayout({style: `spacing: ${WIDGET_ITEM_ROW_GAP}px;`});
-                grid.add_child(line);
-            }
-            line.add_child(this._widgetChip(widget, kind, label, preview, imagePath,
-                locked ? null : () => this._emitRecordingWidgetItemRemoved(index, version)));
+        const chipFor = ([index, kind, label, preview, imagePath]) => this._widgetChip(widget, kind, label, preview, imagePath,
+            locked ? null : () => this._emitRecordingWidgetItemRemoved(index, version));
+        const images = items.filter(item => item[1] === 'image');
+        const texts = items.filter(item => item[1] === 'text');
+        for (let start = 0; start < images.length; start += WIDGET_IMAGE_COLUMNS) {
+            const line = new St.BoxLayout({style: `spacing: ${WIDGET_ITEM_ROW_GAP}px;`});
+            images.slice(start, start + WIDGET_IMAGE_COLUMNS).forEach(item => line.add_child(chipFor(item)));
+            grid.add_child(line);
+        }
+        texts.forEach(item => {
+            const line = new St.BoxLayout({style: `spacing: ${WIDGET_ITEM_ROW_GAP}px;`});
+            line.add_child(chipFor(item));
+            grid.add_child(line);
         });
         const scroll = new St.ScrollView({
             overlay_scrollbars: true,
@@ -1589,18 +1599,37 @@ export default class PromptheusExtension extends Extension {
     }
 
     _widgetChip(widget, kind, label, text, imagePath, onRemove) {
+        const isImage = kind === 'image';
+        const paddingLeft = isImage ? WIDGET_IMAGE_CHIP_PADDING_LEFT : WIDGET_CHIP_PADDING_LEFT;
+        const paddingRight = isImage ? WIDGET_IMAGE_CHIP_PADDING_RIGHT : WIDGET_CHIP_PADDING_RIGHT;
+        const width = (isImage ? WIDGET_IMAGE_CHIP_WIDTH : WIDGET_TEXT_CHIP_WIDTH) - paddingLeft - paddingRight;
         const chip = new St.BoxLayout({
             reactive: true,
             track_hover: true,
             y_align: Clutter.ActorAlign.CENTER,
-            style: `width: ${WIDGET_CHIP_WIDTH - 2 * WIDGET_CHIP_PADDING_X}px; height: ${WIDGET_ITEM_ROW_HEIGHT}px; padding: 0 ${WIDGET_CHIP_PADDING_X}px; spacing: 4px; border-radius: 11px; ` +
+            style: `width: ${width}px; height: ${WIDGET_ITEM_ROW_HEIGHT}px; padding: 0 ${paddingRight}px 0 ${paddingLeft}px; spacing: 4px; border-radius: 11px; ` +
                 'background-color: rgba(255,255,255,0.12); font-size: 11px;',
         });
         chip.isWidgetChip = true;
-        chip.add_child(this._widgetIcon(`item-${kind}`, 12));
-        const labelActor = new St.Label({text: label, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
-        labelActor.clutter_text.ellipsize = Pango.EllipsizeMode.END;
-        chip.add_child(labelActor);
+        chip.add_child(isImage && imagePath ? this._widgetThumb(imagePath) : this._widgetIcon(`item-${kind}`, 12));
+        const numberActor = new St.Label({
+            text: label,
+            x_expand: isImage,
+            y_align: Clutter.ActorAlign.CENTER,
+            style: 'color: #929294;',
+        });
+        numberActor.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+        chip.add_child(numberActor);
+        if (!isImage) {
+            const textActor = new St.Label({
+                text: text.replace(/\s+/g, ' ').trim(),
+                x_expand: true,
+                y_align: Clutter.ActorAlign.CENTER,
+                style: 'color: #e5e5e7;',
+            });
+            textActor.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+            chip.add_child(textActor);
+        }
         if (onRemove) {
             chip.add_child(this._widgetButton(`Remove ${label}`, this._widgetIcon('item-remove', 12), onRemove,
                 'width: 16px; height: 16px; border-radius: 8px;'));
@@ -1612,6 +1641,16 @@ export default class PromptheusExtension extends Extension {
                 this._closePreview(widget);
         });
         return chip;
+    }
+
+    _widgetThumb(imagePath) {
+        return new St.Widget({
+            y_align: Clutter.ActorAlign.CENTER,
+            width: WIDGET_THUMB_SIZE,
+            height: WIDGET_THUMB_SIZE,
+            style: `border-radius: 4px; box-shadow: 0 0 0 1px rgba(255,255,255,0.18); background-image: url("file://${imagePath}"); ` +
+                'background-size: cover; background-position: center; background-repeat: no-repeat;',
+        });
     }
 
     _schedulePreview(widget, chip, text, imagePath) {
