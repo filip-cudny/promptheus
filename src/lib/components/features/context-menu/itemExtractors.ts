@@ -6,12 +6,6 @@ export interface LastInteractionChipData {
   preview: string;
 }
 
-export interface LastTextEntryRef {
-  id: string;
-  skill_id: string | null;
-  skill_name: string | null;
-}
-
 export type TranscriptionStatus = "ok" | "failed" | "retrying";
 
 export interface TranscriptionChipData {
@@ -27,7 +21,6 @@ export interface LastInteractionData {
   input: LastInteractionChipData | null;
   output: LastInteractionChipData | null;
   transcription: TranscriptionChipData | null;
-  last_text_entry: LastTextEntryRef | null;
 }
 
 export type SectionGroup = {

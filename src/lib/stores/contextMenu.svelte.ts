@@ -298,7 +298,7 @@ async function runInDialog(index: number, skillId: string, skillName: string) {
   const skillModel = await fetchSkillModel(skillId);
   await closeMenu(false);
   try {
-    await openConversationDialog(skillId, skillName, undefined, false, text, true, false, skillModel, "alternative_execute");
+    await openConversationDialog(skillId, skillName, undefined, text, true, false, skillModel, "alternative_execute");
   } catch (e) {
     error(`Run in dialog: failed to open dialog for ${skillId}: ${e}`);
   }
@@ -458,7 +458,7 @@ async function openDialogForItem(index: number) {
   const skillName = data.skill_name ?? item.label;
   const skillModel = await fetchSkillModel(skillId);
   await closeMenu(false);
-  await openConversationDialog(skillId, skillName, undefined, undefined, undefined, undefined, undefined, skillModel);
+  await openConversationDialog(skillId, skillName, undefined, undefined, undefined, undefined, skillModel);
 }
 
 export {

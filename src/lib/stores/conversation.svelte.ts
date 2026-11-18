@@ -1238,7 +1238,7 @@ export function createConversationStore(
     }
   }
 
-  async function restoreFromHistory(entryId: string, lastInteractionOnly?: boolean): Promise<void> {
+  async function restoreFromHistory(entryId: string): Promise<void> {
     try {
       const existing = tabs.find((t) => t.history_entry_id === entryId);
       if (existing) {
@@ -1260,7 +1260,7 @@ export function createConversationStore(
         current_path: [],
       };
 
-      if (entry.conversation_data && !lastInteractionOnly) {
+      if (entry.conversation_data) {
         const data = entry.conversation_data;
         newTab.context_text = data.context_text;
         newTab.context_images = data.context_images ?? [];

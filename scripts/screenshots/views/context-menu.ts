@@ -61,7 +61,6 @@ const menuItems = [
         has_audio: false,
         expires_at: null,
       },
-      last_text_entry: { id: "entry-text-1", skill_id: "fix-grammar", skill_name: "Fix grammar" },
     },
   }),
   item("environment_section", "Context", "context", "context", {

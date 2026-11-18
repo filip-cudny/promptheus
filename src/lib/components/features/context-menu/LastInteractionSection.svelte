@@ -3,7 +3,6 @@
     Copy,
     Check,
     History,
-    SquareArrowOutUpRight,
     CircleAlert,
     RotateCcw,
     LoaderCircle,
@@ -13,22 +12,17 @@
   import SectionHeader from "./components/SectionHeader.svelte";
   import ActionIconButton from "$lib/components/shared/ui/ActionIconButton.svelte";
   import Chip from "$lib/components/shared/ui/Chip.svelte";
-  import type {
-    LastInteractionData,
-    LastTextEntryRef,
-  } from "./itemExtractors";
+  import type { LastInteractionData } from "./itemExtractors";
   import type { LastInteractionChip } from "$lib/services/history";
 
   let {
     data,
     onCopyChip,
-    onOpenLastInteraction,
     onOpenHistory,
     onRetryTranscription,
   }: {
     data: LastInteractionData | null;
     onCopyChip: (chip: LastInteractionChip) => Promise<void>;
-    onOpenLastInteraction: (entry: LastTextEntryRef) => Promise<void>;
     onOpenHistory: () => Promise<void>;
     onRetryTranscription: (entryId: string) => Promise<void>;
   } = $props();
@@ -39,12 +33,6 @@
     if (!available) return;
     await onCopyChip(chip);
     copyFeedback.flash(chip);
-  }
-
-  async function handleOpenLastInteraction() {
-    const entry = data?.last_text_entry;
-    if (!entry) return;
-    await onOpenLastInteraction(entry);
   }
 
   type ChipEntry = { type: LastInteractionChip; label: string; preview: string | null };
@@ -82,12 +70,6 @@
 <div class="last-interaction-section">
   <SectionHeader title="Last interaction">
     {#snippet actions()}
-      <ActionIconButton
-        icon={SquareArrowOutUpRight}
-        onclick={handleOpenLastInteraction}
-        disabled={!data?.last_text_entry}
-        label="Open last interaction"
-      />
       <ActionIconButton
         icon={History}
         onclick={onOpenHistory}

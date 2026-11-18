@@ -164,13 +164,6 @@ pub async fn get_context_menu_items(
                     e.output_preview.as_ref().map(|c| serde_json::json!({ "preview": truncate(c, 200) }))
                 }),
                 "transcription": transcription_payload.clone(),
-                "last_text_entry": last_text.as_ref().map(|e| {
-                    serde_json::json!({
-                        "id": e.id,
-                        "skill_id": e.skill_id,
-                        "skill_name": e.skill_name,
-                    })
-                }),
             }));
         }
     }

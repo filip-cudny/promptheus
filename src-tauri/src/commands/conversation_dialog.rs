@@ -16,7 +16,6 @@ pub struct NewConversationEvent {
 #[derive(Serialize, Clone)]
 struct RestoreHistoryEvent {
     entry_id: String,
-    last_interaction_only: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -44,7 +43,6 @@ pub struct DialogInitParams {
     skill_name: String,
     skill_model: Option<String>,
     history_entry_id: Option<String>,
-    last_interaction_only: bool,
     initial_input: Option<String>,
     auto_send_input: bool,
     new_chat: bool,
@@ -71,7 +69,6 @@ pub async fn open_conversation_dialog(
     skill_name: String,
     skill_model: Option<String>,
     history_entry_id: Option<String>,
-    last_interaction_only: Option<bool>,
     initial_input: Option<String>,
     auto_send_input: Option<bool>,
     new_chat: Option<bool>,
@@ -79,7 +76,6 @@ pub async fn open_conversation_dialog(
     copy_token: Option<String>,
 ) -> crate::Result<()> {
     let label = "conversation-dialog";
-    let last_interaction_only = last_interaction_only.unwrap_or(false);
     let auto_send_input = auto_send_input.unwrap_or(false);
     let new_chat = new_chat.unwrap_or(false);
 
@@ -88,7 +84,6 @@ pub async fn open_conversation_dialog(
             &app,
             label,
             history_entry_id,
-            last_interaction_only,
             initial_input,
             auto_send_input,
             &skill_id,
@@ -108,7 +103,6 @@ pub async fn open_conversation_dialog(
         skill_name: skill_name.clone(),
         skill_model: skill_model.clone(),
         history_entry_id: history_entry_id.clone(),
-        last_interaction_only,
         initial_input: initial_input.clone(),
         auto_send_input,
         new_chat,
@@ -138,7 +132,6 @@ fn emit_reuse_event(
     app: &tauri::AppHandle,
     label: &str,
     history_entry_id: Option<String>,
-    last_interaction_only: bool,
     initial_input: Option<String>,
     auto_send_input: bool,
     skill_id: &str,
@@ -166,10 +159,7 @@ fn emit_reuse_event(
         app.emit_to(
             label,
             "restore-history",
-            RestoreHistoryEvent {
-                entry_id,
-                last_interaction_only,
-            },
+            RestoreHistoryEvent { entry_id },
         )?;
     } else if let Some(text) = initial_input {
         app.emit_to(

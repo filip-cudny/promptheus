@@ -30,7 +30,6 @@
     skill_name: string;
     skill_model: string | null;
     history_entry_id: string | null;
-    last_interaction_only: boolean;
     initial_input: string | null;
     auto_send_input: boolean;
     new_chat: boolean;
@@ -214,7 +213,7 @@
     if (p.new_chat) {
       store.addTab();
     } else if (p.history_entry_id) {
-      await store.restoreFromHistory(p.history_entry_id, p.last_interaction_only);
+      await store.restoreFromHistory(p.history_entry_id);
     } else if (p.initial_input) {
       await handleVoiceInput(p.skill_id, p.initial_input, p.skill_model, p.auto_send_input, p.invocation_source, p.copy_token);
     } else if (p.skill_id) {
@@ -232,8 +231,8 @@
 
   const ipc = useConversationDialogIpc({
     selfTarget: SELF_TARGET,
-    onRestoreHistory: (entryId, lastInteractionOnly) => {
-      store.restoreFromHistory(entryId, lastInteractionOnly);
+    onRestoreHistory: (entryId) => {
+      store.restoreFromHistory(entryId);
     },
     onVoiceInput: (text, skillId, skillModel, autoSend, source, copyToken) =>
       handleVoiceInput(skillId, text, skillModel, autoSend, source, copyToken),

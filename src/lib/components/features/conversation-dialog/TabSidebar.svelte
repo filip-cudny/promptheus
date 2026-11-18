@@ -49,7 +49,7 @@
 
   function handleItemClick(item: SidebarItem) {
     if (mutex.editingId) return;
-    store.restoreFromHistory(item.entry.id, false);
+    store.restoreFromHistory(item.entry.id);
     onClose();
     focusConversationInput();
   }

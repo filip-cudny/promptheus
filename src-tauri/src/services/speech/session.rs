@@ -236,7 +236,6 @@ async fn open_chat(app: &AppHandle, request: ChatRequest, copy_token: String) {
         String::new(),
         request.skill_model,
         None,
-        None,
         Some(request.initial_input),
         Some(request.auto_send),
         None,

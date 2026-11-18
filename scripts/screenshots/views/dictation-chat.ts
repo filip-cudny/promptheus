@@ -97,7 +97,6 @@ export const fixture: Fixture = {
       skill_name: "",
       skill_model: null,
       history_entry_id: null,
-      last_interaction_only: false,
       initial_input: transcript,
       auto_send_input: true,
       new_chat: false,

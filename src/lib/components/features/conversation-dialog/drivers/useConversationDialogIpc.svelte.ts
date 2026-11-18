@@ -4,7 +4,7 @@ import type { InvocationSource } from "$lib/types/history";
 
 export function useConversationDialogIpc(opts: {
   selfTarget: string;
-  onRestoreHistory: (entryId: string, lastInteractionOnly?: boolean) => void;
+  onRestoreHistory: (entryId: string) => void;
   onVoiceInput: (
     text: string,
     skillId: string,
@@ -25,9 +25,9 @@ export function useConversationDialogIpc(opts: {
   let unlistens: UnlistenFn[] = [];
 
   async function init() {
-    const u1 = await listen<{ entry_id: string; last_interaction_only?: boolean }>(
+    const u1 = await listen<{ entry_id: string }>(
       "restore-history",
-      (event) => opts.onRestoreHistory(event.payload.entry_id, event.payload.last_interaction_only),
+      (event) => opts.onRestoreHistory(event.payload.entry_id),
       { target: opts.selfTarget },
     );
 

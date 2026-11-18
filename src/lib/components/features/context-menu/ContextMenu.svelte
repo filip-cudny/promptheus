@@ -7,12 +7,11 @@
     extractContextItems,
     extractLastInteractionData,
     groupBySection,
-    type LastTextEntryRef,
   } from "./itemExtractors";
   import ContextSection from "./ContextSection.svelte";
   import LastInteractionSection from "./LastInteractionSection.svelte";
   import FloatingPanel from "$lib/components/shared/ui/FloatingPanel.svelte";
-  import { focusOrOpenChat, openConversationDialog } from "$lib/services/conversationDialog";
+  import { focusOrOpenChat } from "$lib/services/conversationDialog";
   import { newTab } from "$lib/services/tabs";
   import { openImagePreview } from "$lib/services/windowPreviews";
   import {
@@ -172,11 +171,6 @@
     await copyLastInteraction(chip);
   }
 
-  async function handleOpenLastInteraction(entry: LastTextEntryRef) {
-    await menu.closeMenu(false);
-    await openConversationDialog(entry.skill_id ?? "", entry.skill_name ?? "", entry.id, true);
-  }
-
   async function handleOpenHistory() {
     await menu.closeMenu(false);
     await openHistoryDialog();
@@ -297,7 +291,6 @@
           <LastInteractionSection
             data={lastInteractionData}
             onCopyChip={handleCopyChip}
-            onOpenLastInteraction={handleOpenLastInteraction}
             onOpenHistory={handleOpenHistory}
             onRetryTranscription={handleRetryTranscription}
           />
