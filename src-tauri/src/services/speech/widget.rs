@@ -45,7 +45,7 @@ const MAX_ITEM_ROWS: u32 = 3;
 const ITEM_ROW_HEIGHT: f64 = 22.0;
 const ITEM_ROW_GAP: f64 = 4.0;
 const ITEMS_ROW_PADDING: f64 = 10.0;
-const ITEM_COLUMNS: usize = 2;
+const IMAGE_COLUMNS: usize = 3;
 const PREVIEW_CHARS: usize = 300;
 const DROPDOWN_ROW_HEIGHT: f64 = 28.0;
 const DROPDOWN_PADDING: f64 = 4.0;
@@ -156,6 +156,8 @@ pub struct PillItem {
     pub kind: String,
     pub label: String,
     pub preview: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -260,6 +262,7 @@ pub struct RecordingWidget {
     inner: Mutex<Inner>,
     move_seq: AtomicU64,
     programmatic_origin: std::sync::Mutex<Option<(i32, i32)>>,
+    thumbnails: super::pill_previews::ThumbnailCache,
 }
 
 pub fn choose_transport(enabled: bool, session: SessionKind) -> Option<Transport> {
@@ -301,8 +304,8 @@ pub fn smooth_level(previous: f64, target: f64) -> f64 {
     previous + (target - previous) * rate
 }
 
-pub fn item_rows(count: usize) -> u32 {
-    (count.div_ceil(ITEM_COLUMNS) as u32).min(MAX_ITEM_ROWS)
+pub fn item_rows(images: usize, texts: usize) -> u32 {
+    (images.div_ceil(IMAGE_COLUMNS) + texts).min(MAX_ITEM_ROWS as usize) as u32
 }
 
 pub fn items_height(rows: u32) -> f64 {
@@ -455,14 +458,10 @@ pub fn pill_items(items: &[ContextItem]) -> Vec<PillItem> {
         .enumerate()
         .map(|(index, item)| {
             let (kind, label, preview) = match item {
-                ContextItem::Text { number, content } => {
-                    ("text", format!("Text #{number}"), text_preview(content))
-                }
-                ContextItem::Image { number, .. } => {
-                    ("image", format!("Image #{number}"), String::new())
-                }
+                ContextItem::Text { number, content } => ("text", format!("#{number}"), text_preview(content)),
+                ContextItem::Image { number, .. } => ("image", format!("#{number}"), String::new()),
             };
-            PillItem { index: index as u32, kind: kind.to_string(), label, preview }
+            PillItem { index: index as u32, kind: kind.to_string(), label, preview, thumbnail: None }
         })
         .collect()
 }
@@ -480,14 +479,17 @@ pub fn build_model(
         Some(pending) => (pending.id.clone(), pending.name.clone()),
         None => (DICTATION_ID.to_string(), DICTATION_LABEL.to_string()),
     };
-    let items = pill_items(context_items);
+    let images = context_items
+        .iter()
+        .filter(|item| matches!(item, ContextItem::Image { .. }))
+        .count();
     PillModel {
         targets,
         selected_id,
         selected_label,
         target_locked,
-        item_rows: item_rows(items.len()),
-        items,
+        item_rows: item_rows(images, context_items.len() - images),
+        items: pill_items(context_items),
         context_version,
         stop_chat_destination: stop_chat_destination.to_string(),
         x: origin.0,
@@ -495,16 +497,19 @@ pub fn build_model(
     }
 }
 
-async fn gather_model(app: &AppHandle, origin: (i32, i32)) -> (PillModel, Vec<ContextItem>) {
+async fn current_context_items(app: &AppHandle) -> Vec<ContextItem> {
+    match app.try_state::<Arc<Mutex<ContextManagerService>>>() {
+        Some(context) => context.lock().await.get_items(),
+        None => Vec::new(),
+    }
+}
+
+async fn gather_model(app: &AppHandle, origin: (i32, i32), items: &[ContextItem]) -> PillModel {
     let providers = configured_providers(app).await;
     let claude_target = configured_claude_target(app).await;
     let targets = match app.try_state::<Arc<Mutex<SkillService>>>() {
         Some(skills) => pill_targets(skills.lock().await.list_skills(), &providers, claude_target),
         None => pill_targets(&[], &providers, claude_target),
-    };
-    let items = match app.try_state::<Arc<Mutex<ContextManagerService>>>() {
-        Some(context) => context.lock().await.get_items(),
-        None => Vec::new(),
     };
     let speech = app.try_state::<Arc<Mutex<SpeechService>>>();
     let (pending, locked) = match &speech {
@@ -515,8 +520,34 @@ async fn gather_model(app: &AppHandle, origin: (i32, i32)) -> (PillModel, Vec<Co
         None => (None, false),
     };
     let destination = stop_chat_destination(configured_stop_chat_target(app).await, claude_target);
-    let model = build_model(targets, pending.as_ref(), locked, &items, current_context_version(), origin, destination);
-    (model, items)
+    build_model(targets, pending.as_ref(), locked, items, current_context_version(), origin, destination)
+}
+
+async fn warm_thumbnails(app: &AppHandle, context_items: &[ContextItem]) {
+    let images: Vec<(String, String)> = context_items
+        .iter()
+        .filter_map(|item| match item {
+            ContextItem::Image { data, media_type, .. } => Some((data.clone(), media_type.clone())),
+            ContextItem::Text { .. } => None,
+        })
+        .collect();
+    let app = app.clone();
+    let warmed = tauri::async_runtime::spawn_blocking(move || {
+        app.state::<RecordingWidget>().thumbnails.refresh(&images);
+    })
+    .await;
+    if let Err(e) = warmed {
+        log::warn!("the pill thumbnail task failed: {e}");
+    }
+}
+
+fn attach_thumbnails(app: &AppHandle, items: &mut [PillItem], context_items: &[ContextItem]) {
+    let widget = app.state::<RecordingWidget>();
+    for (item, source) in items.iter_mut().zip(context_items) {
+        if let ContextItem::Image { data, .. } = source {
+            item.thumbnail = widget.thumbnails.get(data);
+        }
+    }
 }
 
 fn placement_origin(inner: &Inner) -> (i32, i32) {
@@ -690,6 +721,7 @@ impl RecordingWidget {
             }),
             move_seq: AtomicU64::new(0),
             programmatic_origin: std::sync::Mutex::new(None),
+            thumbnails: super::pill_previews::ThumbnailCache::default(),
         }
     }
 
@@ -711,7 +743,11 @@ impl RecordingWidget {
             return false;
         };
 
-        let item_rows = gather_model(app, (0, 0)).await.0.item_rows;
+        let context_items = current_context_items(app).await;
+        let item_rows = gather_model(app, (0, 0), &context_items).await.item_rows;
+        if transport == Transport::Window {
+            warm_thumbnails(app, &context_items).await;
+        }
         let mut inner = self.inner.lock().await;
         inner.generation += 1;
         inner.session = session;
@@ -980,11 +1016,18 @@ impl RecordingWidget {
     }
 
     pub async fn refresh_model(&self, app: &AppHandle) {
+        let Some(transport) = self.inner.lock().await.transport else {
+            return;
+        };
+        let context_items = current_context_items(app).await;
+        if transport == Transport::Window {
+            warm_thumbnails(app, &context_items).await;
+        }
         let mut inner = self.inner.lock().await;
         if inner.transport.is_none() {
             return;
         }
-        let (model, context_items) = gather_model(app, placement_origin(&inner)).await;
+        let model = gather_model(app, placement_origin(&inner), &context_items).await;
         if rows_resize(inner.item_rows, model.item_rows) {
             self.resize_locked(app, &mut inner, model.item_rows);
         }
@@ -1286,7 +1329,8 @@ async fn push(app: &AppHandle, inner: &mut Inner, level: f64) {
 }
 
 async fn push_current_model(app: &AppHandle, inner: &mut Inner) {
-    let (model, context_items) = gather_model(app, placement_origin(inner)).await;
+    let context_items = current_context_items(app).await;
+    let model = gather_model(app, placement_origin(inner), &context_items).await;
     push_model(app, inner, model, &context_items).await;
 }
 
@@ -1349,8 +1393,6 @@ async fn push_model(app: &AppHandle, inner: &mut Inner, mut model: PillModel, co
     let Some(transport) = inner.transport else {
         return;
     };
-    #[cfg(not(target_os = "linux"))]
-    let _ = context_items;
     if let Some(placement) = inner.placement {
         model.x = placement.origin.0.round() as i32;
         model.y = placement.origin.1.round() as i32;
@@ -1390,9 +1432,11 @@ async fn push_model(app: &AppHandle, inner: &mut Inner, mut model: PillModel, co
             }
             None => Ok(()),
         },
-        Transport::Window => app
-            .emit_to(WINDOW_LABEL, MODEL_EVENT, &model)
-            .map_err(|e| e.to_string()),
+        Transport::Window => {
+            attach_thumbnails(app, &mut model.items, context_items);
+            app.emit_to(WINDOW_LABEL, MODEL_EVENT, &model)
+                .map_err(|e| e.to_string())
+        }
     };
     note_update_failure(inner, result);
 }
@@ -1544,12 +1588,31 @@ mod tests {
     }
 
     #[test]
-    fn chips_fill_two_columns_up_to_three_rows() {
-        assert_eq!(item_rows(0), 0);
-        assert_eq!(item_rows(1), 1);
-        assert_eq!(item_rows(2), 1);
-        assert_eq!(item_rows(3), 2);
-        assert_eq!(item_rows(7), 3);
+    fn images_share_rows_of_three_and_each_text_takes_a_row_up_to_three_rows() {
+        assert_eq!(item_rows(0, 0), 0);
+        assert_eq!(pill_size(item_rows(0, 0)), (264.0, 72.0));
+        for images in 1..=3 {
+            assert_eq!(item_rows(images, 0), 1);
+        }
+        assert_eq!(pill_size(item_rows(1, 0)), (264.0, 104.0));
+        assert_eq!(item_rows(4, 0), 2);
+        assert_eq!(item_rows(2, 1), 2);
+        assert_eq!(item_rows(1, 2), 3);
+        assert_eq!(item_rows(3, 3), 3);
+    }
+
+    #[test]
+    fn build_model_sizes_the_pill_by_the_image_first_rule() {
+        let items = [
+            numbered_text(1),
+            numbered_image(1),
+            numbered_text(2),
+            numbered_image(2),
+            numbered_image(3),
+        ];
+        let model = build_model(vec![], None, false, &items, 0, (0, 0), "");
+        assert_eq!(model.item_rows, 3);
+        assert_eq!(model.items.len(), 5);
     }
 
     #[test]
@@ -1822,19 +1885,34 @@ mod tests {
     fn items_are_labelled_per_kind_in_context_order() {
         let items = pill_items(&[numbered_text(1), numbered_image(1), numbered_text(2)]);
         let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(labels, ["Text #1", "Image #1", "Text #2"]);
+        assert_eq!(labels, ["#1", "#1", "#2"]);
         assert_eq!(
             items[1],
-            PillItem { index: 1, kind: "image".into(), label: "Image #1".into(), preview: String::new() }
+            PillItem {
+                index: 1,
+                kind: "image".into(),
+                label: "#1".into(),
+                preview: String::new(),
+                thumbnail: None,
+            }
         );
     }
 
     #[test]
     fn labels_keep_item_numbers_after_a_removal() {
-        let items = pill_items(&[numbered_text(2), numbered_text(3)]);
+        let items = pill_items(&[numbered_text(1), numbered_text(3)]);
         let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(labels, ["Text #2", "Text #3"]);
+        assert_eq!(labels, ["#1", "#3"]);
         assert_eq!(items[0].index, 0);
+    }
+
+    #[test]
+    fn index_is_the_context_position_for_a_mix_of_texts_and_images() {
+        let items = pill_items(&[numbered_text(1), numbered_image(1), numbered_text(2), numbered_image(2)]);
+        let indexes: Vec<u32> = items.iter().map(|item| item.index).collect();
+        let kinds: Vec<&str> = items.iter().map(|item| item.kind.as_str()).collect();
+        assert_eq!(indexes, [0, 1, 2, 3]);
+        assert_eq!(kinds, ["text", "image", "text", "image"]);
     }
 
     #[test]
@@ -2009,13 +2087,23 @@ mod tests {
             selected_id: "__dictation__".into(),
             selected_label: "Dictation".into(),
             target_locked: false,
-            items: vec![PillItem {
-                index: 0,
-                kind: "text".into(),
-                label: "Text #1".into(),
-                preview: "hello".into(),
-            }],
-            item_rows: 1,
+            items: vec![
+                PillItem {
+                    index: 0,
+                    kind: "text".into(),
+                    label: "#1".into(),
+                    preview: "hello".into(),
+                    thumbnail: None,
+                },
+                PillItem {
+                    index: 1,
+                    kind: "image".into(),
+                    label: "#1".into(),
+                    preview: String::new(),
+                    thumbnail: Some("data:image/png;base64,AAAA".into()),
+                },
+            ],
+            item_rows: 2,
             context_version: 7,
             stop_chat_destination: "Claude".into(),
             x: 3,
@@ -2028,8 +2116,17 @@ mod tests {
                 "selectedId": "__dictation__",
                 "selectedLabel": "Dictation",
                 "targetLocked": false,
-                "items": [{ "index": 0, "kind": "text", "label": "Text #1", "preview": "hello" }],
-                "itemRows": 1,
+                "items": [
+                    { "index": 0, "kind": "text", "label": "#1", "preview": "hello" },
+                    {
+                        "index": 1,
+                        "kind": "image",
+                        "label": "#1",
+                        "preview": "",
+                        "thumbnail": "data:image/png;base64,AAAA"
+                    }
+                ],
+                "itemRows": 2,
                 "contextVersion": 7,
                 "stopChatDestination": "Claude",
             })

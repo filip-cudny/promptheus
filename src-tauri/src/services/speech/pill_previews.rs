@@ -1,14 +1,17 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use base64::Engine;
+use image::imageops::FilterType;
 use image::ImageFormat;
 
 pub const DIR_NAME: &str = "pill-previews";
 const MAX_WIDTH: u32 = 480;
 const MAX_HEIGHT: u32 = 320;
+const THUMBNAIL_SIZE: u32 = 32;
 
 pub fn preview_file_name(data: &str) -> String {
     let mut hasher = DefaultHasher::new();
@@ -36,6 +39,60 @@ pub fn write_preview(dir: &Path, data: &str, media_type: &str) -> io::Result<Pat
         std::fs::write(&path, bytes)?;
     }
     Ok(path)
+}
+
+fn encode_thumbnail(data: &str) -> io::Result<String> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .map_err(io::Error::other)?;
+    let source = image::load_from_memory_with_format(&bytes, ImageFormat::Png).map_err(io::Error::other)?;
+    let thumbnail = source.resize_to_fill(THUMBNAIL_SIZE, THUMBNAIL_SIZE, FilterType::Triangle);
+    let mut png = Vec::new();
+    thumbnail
+        .write_to(&mut io::Cursor::new(&mut png), ImageFormat::Png)
+        .map_err(io::Error::other)?;
+    Ok(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
+}
+
+pub fn thumbnail_data_uri(data: &str, media_type: &str) -> Option<String> {
+    if media_type != "image/png" {
+        return None;
+    }
+    match encode_thumbnail(data) {
+        Ok(uri) => Some(uri),
+        Err(e) => {
+            log::debug!("pill thumbnail failed: {e}");
+            None
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct ThumbnailCache {
+    entries: Mutex<HashMap<String, Option<String>>>,
+}
+
+impl ThumbnailCache {
+    fn locked(&self) -> std::sync::MutexGuard<'_, HashMap<String, Option<String>>> {
+        self.entries.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn refresh(&self, images: &[(String, String)]) {
+        let mut current = HashMap::new();
+        for (data, media_type) in images {
+            let key = preview_file_name(data);
+            if current.contains_key(&key) {
+                continue;
+            }
+            let cached = self.locked().get(&key).cloned();
+            current.insert(key, cached.unwrap_or_else(|| thumbnail_data_uri(data, media_type)));
+        }
+        *self.locked() = current;
+    }
+
+    pub fn get(&self, data: &str) -> Option<String> {
+        self.locked().get(&preview_file_name(data)).cloned().flatten()
+    }
 }
 
 pub fn sync_previews(dir: &Path, images: &[(String, String)]) -> io::Result<Vec<PathBuf>> {
@@ -114,6 +171,40 @@ mod tests {
         assert_eq!(second[0], first[1]);
         assert!(second.iter().all(|path| path.exists()));
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn a_png_thumbnail_is_a_32_px_square_data_uri() {
+        let uri = thumbnail_data_uri(&png_base64(100, 40, 1), "image/png").unwrap();
+        let encoded = uri.strip_prefix("data:image/png;base64,").unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD.decode(encoded).unwrap();
+        let thumbnail = image::load_from_memory_with_format(&bytes, ImageFormat::Png).unwrap();
+        assert_eq!((thumbnail.width(), thumbnail.height()), (32, 32));
+    }
+
+    #[test]
+    fn a_non_png_image_has_no_thumbnail() {
+        assert_eq!(thumbnail_data_uri(&png_base64(10, 10, 1), "image/jpeg"), None);
+    }
+
+    #[test]
+    fn a_png_that_does_not_decode_has_no_thumbnail() {
+        assert_eq!(thumbnail_data_uri("not an image", "image/png"), None);
+    }
+
+    #[test]
+    fn the_cache_keeps_only_the_current_images() {
+        let cache = ThumbnailCache::default();
+        let png = |shade| (png_base64(10, 10, shade), "image/png".to_string());
+        let (a, b) = (png(1), png(2));
+
+        cache.refresh(&[a.clone(), b.clone()]);
+        assert!(cache.get(&a.0).is_some());
+        assert!(cache.get(&b.0).is_some());
+
+        cache.refresh(&[b.clone()]);
+        assert_eq!(cache.get(&a.0), None);
+        assert!(cache.get(&b.0).is_some());
     }
 
     #[test]
