@@ -4,7 +4,7 @@ import { appSettings } from "./settings";
 
 export { label } from "./conversation";
 
-const transcript = "Why does the cart total fail? The screenshot shows the error.";
+export const transcript = "Why does the cart total fail? The screenshot shows the error.";
 
 const answer = [
   "`reduce` has no starting value, so for an empty cart it has nothing to return and `total` stays `undefined`. Pass `0` as the second argument:",

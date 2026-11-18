@@ -1,10 +1,27 @@
+import { mount } from "svelte";
+import { Volume2 } from "lucide-svelte";
 import type { Animation, Stage, Step } from "../host";
+import { transcript } from "../views/dictation-chat";
 
 const RECORDING_START_MS = 1000;
 const LEVEL_TICK_MS = 120;
 const POINTER_TRAVEL_MS = 700;
 const PRESS_MS = 150;
 const SELECTION = { left: 56, top: 64, right: 470, bottom: 410 };
+
+const RECORDING_STEP_MS = 1400;
+const SCREENSHOT_CLICK_MS = 800;
+const SCREENSHOT_PILL_HIDE_MS = 1250;
+const PILL_RETURN_STEP_MS = 1000;
+const PILL_RETURN_MS = 100;
+const STOP_CLICK_MS = 800;
+const STOP_PILL_HIDE_MS = 1900;
+const FIRST_PART_SPAN_MS = RECORDING_STEP_MS + SCREENSHOT_CLICK_MS;
+const SECOND_PART_SPAN_MS = PILL_RETURN_STEP_MS - PILL_RETURN_MS + STOP_CLICK_MS;
+
+const [firstPart, secondPart] = transcript.split(/(?<=\?) /);
+const firstWords = firstPart.split(" ");
+const words = [...firstWords, ...secondPart.split(" ")];
 
 export const backdrop = `
 <style>
@@ -22,6 +39,15 @@ export const backdrop = `
   #capture-frame { position: absolute; box-sizing: border-box; width: 0; height: 0; background-color: rgba(255, 255, 255, 0.15); border: 1px solid white; visibility: hidden; transition: width ${POINTER_TRAVEL_MS}ms ease-in-out, height ${POINTER_TRAVEL_MS}ms ease-in-out; }
   #pointer { position: absolute; z-index: 10; left: 600px; top: 360px; width: 20px; height: 28px; background: #fff; clip-path: polygon(0 0, 0 82%, 28% 64%, 48% 100%, 64% 92%, 45% 58%, 82% 58%); opacity: 0; transition: left ${POINTER_TRAVEL_MS}ms ease-in-out, top ${POINTER_TRAVEL_MS}ms ease-in-out, opacity 200ms, transform 120ms; transform-origin: 0 0; }
   #pointer.pressed { transform: scale(0.8); }
+  #subtitles { position: absolute; z-index: 2; left: 50%; top: 286px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-radius: 8px; background: rgba(0, 0, 0, 0.72); font: 500 17px/1.3 var(--font-sans); white-space: nowrap; visibility: hidden; }
+  #subtitles .word { color: rgba(255, 255, 255, 0.38); transition: color 120ms; }
+  #subtitles .word.said { color: #fff; }
+  #subtitles .word.current { color: #9cc4ff; }
+  #subtitles-speaker { flex: none; display: flex; color: #9cc4ff; }
+  #subtitles-speaker path:nth-child(n + 2) { animation: subtitles-pulse 900ms ease-in-out infinite; }
+  #subtitles-speaker path:nth-child(3) { animation-delay: 250ms; }
+  #subtitles.paused #subtitles-speaker path:nth-child(n + 2) { animation: none; opacity: 0.25; }
+  @keyframes subtitles-pulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
   #pointer.crosshair { width: 23px; height: 23px; margin: -11px 0 0 -11px; clip-path: none; background: linear-gradient(#fff, #fff) center / 1px 100% no-repeat, linear-gradient(#fff, #fff) center / 100% 1px no-repeat; filter: drop-shadow(0 0 1px #000); }
 </style>
 <div class="desktop"></div>
@@ -36,6 +62,7 @@ export const backdrop = `
 <span class="fn">console</span>.<span class="fn">log</span>(<span class="fn">cartTotal</span>([]));</pre>
   <div class="editor-error">CartError: total is undefined<br />    at cartTotal (cart.js:2)</div>
 </div>
+<div id="subtitles"><span id="subtitles-speaker"></span><span>${words.map((word) => `<span class="word">${word}</span>`).join(" ")}</span></div>
 <div class="chat-shadow"></div>
 <div id="capture-overlay" hidden><div id="capture-frame"></div></div>
 <div id="pointer"></div>`;
@@ -83,6 +110,32 @@ function element(stage: Stage, id: string) {
   return stage.root.querySelector<HTMLElement>(`#${id}`)!;
 }
 
+function showSubtitles(stage: Stage, visible: boolean) {
+  element(stage, "subtitles").style.visibility = visible ? "visible" : "hidden";
+}
+
+function markWords(stage: Stage, said: number, current: number | null) {
+  element(stage, "subtitles")
+    .querySelectorAll(".word")
+    .forEach((word, index) => {
+      word.classList.toggle("said", index < said);
+      word.classList.toggle("current", index === current);
+    });
+}
+
+async function sayWords(stage: Stage, from: number, to: number, spanMs: number) {
+  const bar = element(stage, "subtitles");
+  const intervalMs = spanMs / (to - from);
+  const startedAt = performance.now();
+  bar.classList.remove("paused");
+  for (let index = from; index < to; index++) {
+    markWords(stage, index, index);
+    await stage.sleep(startedAt + (index - from + 1) * intervalMs - performance.now());
+  }
+  markWords(stage, to, null);
+  bar.classList.add("paused");
+}
+
 function movePointer(stage: Stage, x: number, y: number) {
   const arrow = element(stage, "pointer");
   arrow.style.opacity = "1";
@@ -105,7 +158,7 @@ export const steps: Step[] = [
   {
     caption: "Shift+F1",
     shownAtMs: 1000,
-    durationMs: 1400,
+    durationMs: RECORDING_STEP_MS,
     actions: [
       {
         atMs: 0,
@@ -113,6 +166,14 @@ export const steps: Step[] = [
           await stage.show("pill");
           stage.setVisible("pill", true);
           await runRecording(stage);
+        },
+      },
+      {
+        atMs: 0,
+        run: async (stage) => {
+          mount(Volume2, { target: element(stage, "subtitles-speaker"), props: { size: 22 } });
+          showSubtitles(stage, true);
+          await sayWords(stage, 0, firstWords.length, FIRST_PART_SPAN_MS);
         },
       },
     ],
@@ -130,17 +191,18 @@ export const steps: Step[] = [
         },
       },
       {
-        atMs: 800,
+        atMs: SCREENSHOT_CLICK_MS,
         run: async (stage) => {
           await clickPillButton(stage, SCREENSHOT_BUTTON);
           element(stage, "pointer").classList.remove("pressed");
         },
       },
       {
-        atMs: 1250,
+        atMs: SCREENSHOT_PILL_HIDE_MS,
         run: async (stage) => {
           await emitIn(stage, "pill", "recording-widget-pointer", null);
           stage.setVisible("pill", false);
+          showSubtitles(stage, false);
         },
       },
     ],
@@ -188,14 +250,19 @@ export const steps: Step[] = [
   {
     caption: null,
     shownAtMs: 500,
-    durationMs: 1000,
+    durationMs: PILL_RETURN_STEP_MS,
     actions: [
       {
-        atMs: 100,
+        atMs: PILL_RETURN_MS,
         run: async (stage) => {
           await (stage.frameWindow("pill").addImage as () => Promise<void>)();
           stage.setVisible("pill", true);
+          showSubtitles(stage, true);
         },
+      },
+      {
+        atMs: PILL_RETURN_MS,
+        run: (stage) => sayWords(stage, firstWords.length, words.length, SECOND_PART_SPAN_MS),
       },
     ],
   },
@@ -212,7 +279,7 @@ export const steps: Step[] = [
         },
       },
       {
-        atMs: 800,
+        atMs: STOP_CLICK_MS,
         run: async (stage) => {
           await clickPillButton(stage, STOP_CHAT_BUTTON);
           recording = false;
@@ -227,9 +294,10 @@ export const steps: Step[] = [
         },
       },
       {
-        atMs: 1900,
+        atMs: STOP_PILL_HIDE_MS,
         run: (stage) => {
           stage.setVisible("pill", false);
+          showSubtitles(stage, false);
           element(stage, "pointer").style.opacity = "0";
         },
       },

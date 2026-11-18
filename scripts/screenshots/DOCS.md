@@ -22,7 +22,7 @@
 ## Animations
 
 - `quick-action`: text selected in an editor, `Ctrl+F1` opens the context menu, prompt 2 runs, a toast reports the result, `Ctrl+V` pastes it.
-- `dictation`: `Shift+F1` starts the recording pill (rendered as macOS, the only platform whose webview pill has the Screenshot button), a drawn pointer clicks Screenshot and drags a rectangle over a code error in the GNOME extension's area selector look (stage dimmed `rgba(0, 0, 0, 0.4)`, crosshair, frame of `extension.js` `_selectCaptureArea`), the pill returns with the `#1` image chip (square thumbnail), the pointer clicks stop + chat and the chat streams the answer.
+- `dictation`: `Shift+F1` starts the recording pill (rendered as macOS, the only platform whose webview pill has the Screenshot button), a drawn pointer clicks Screenshot and drags a rectangle over a code error in the GNOME extension's area selector look (stage dimmed `rgba(0, 0, 0, 0.4)`, crosshair, frame of `extension.js` `_selectCaptureArea`), the pill returns with the `#1` image chip (square thumbnail), the pointer clicks stop + chat and the chat streams the answer. A subtitle bar (dark bar, `Volume2` speaker, said / being said / coming words) shows the sentence of the chat message (`transcript` of `views/dictation-chat.ts`) word by word while the pill records, and is hidden with the pill during the area drag.
 
 Both fixtures name the model `GPT-6`.
 
