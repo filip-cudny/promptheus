@@ -165,6 +165,7 @@ For typing dynamic Lucide icon props, use `ComponentType<SvelteComponent<IconPro
 ### CollapsibleSection
 
 - Uses `bind:collapsed` for two-way binding — parent controls open/closed state.
+- `titleTooltip` is the native `title` of the title text.
 - Header uses Lucide `ChevronRight`/`ChevronDown` icons for collapse indicator. The `actions` snippet renders on the right side and stops click propagation. `headerClass` allows conditional styling of the header (e.g., highlight when content is present).
 - Content area uses `svelte/transition` `slide` for smooth expand/collapse.
 - The optional `summary` snippet renders after the title and takes the free header width (`flex: 1`, clipped); the title keeps its own width, ellipsized when short of room, and `actions` stay at the right edge with or without a `summary`. A chip in the snippet stops its click (`ContextItemChip` does), so only the other header clicks toggle.

@@ -44,7 +44,11 @@
     return [...images, ...texts];
   });
   let visibleChips = $derived(headerChips.slice(0, MAX_HEADER_CHIPS));
-  let hiddenChipCount = $derived(headerChips.length - visibleChips.length);
+  let chipRow: HTMLElement | null = $state(null);
+  let moreChipsLabel: HTMLElement | null = $state(null);
+  let fittingChipCount = $state(MAX_HEADER_CHIPS);
+  let shownChipCount = $derived(Math.min(fittingChipCount, visibleChips.length));
+  let hiddenChipCount = $derived(headerChips.length - shownChipCount);
   let contextHeaderClass = $derived(collapsed && hasContent ? "context-has-content" : "");
 
   $effect(() => {
@@ -54,6 +58,27 @@
   $effect(() => {
     store.updateContextImages(localImages);
   });
+
+  $effect(() => {
+    void [visibleChips, shownChipCount, moreChipsLabel];
+    const row = chipRow;
+    if (!row) return;
+    const observer = new ResizeObserver(() => fitChipsInFirstLine(row));
+    observer.observe(row);
+    return () => observer.disconnect();
+  });
+
+  function fitChipsInFirstLine(row: HTMLElement) {
+    const firstLineBottom = row.getBoundingClientRect().bottom;
+    const inFirstLine = (el: Element | null | undefined) => !!el && el.getBoundingClientRect().top < firstLineBottom;
+    const slots = row.querySelectorAll(".chip-slot");
+    const lastShown = slots[shownChipCount - 1];
+    if (shownChipCount > 0 && (!inFirstLine(lastShown) || (moreChipsLabel && !inFirstLine(moreChipsLabel)))) {
+      fittingChipCount = shownChipCount - 1;
+    } else if (inFirstLine(slots[shownChipCount])) {
+      fittingChipCount = shownChipCount + 1;
+    }
+  }
 
   onMount(async () => {
     try {
@@ -125,32 +150,41 @@
       </div>
     </div>
   {:else}
-    <CollapsibleSection title="Context" bind:collapsed headerClass={contextHeaderClass}>
+    <CollapsibleSection
+      title="Context"
+      titleTooltip="Sent with every message in this conversation"
+      bind:collapsed
+      headerClass={contextHeaderClass}
+    >
       {#snippet summary()}
         {#if collapsed && hasContent}
-          {#each visibleChips as chip}
-            {#if chip.kind === "image"}
-              <ContextItemChip
-                kind="image"
-                number={chip.number}
-                src={`data:${chip.image.media_type};base64,${chip.image.data}`}
-                title="Open image #{chip.number}"
-                onclick={() => openImagePreview(chip.image.data, chip.image.media_type)}
-              />
-            {:else}
-              <ContextItemChip
-                kind="text"
-                number={chip.number}
-                text={chip.text}
-                maxWidth={TEXT_CHIP_MAX_WIDTH}
-                title={chip.text.slice(0, TEXT_CHIP_TITLE_CHARS)}
-                onclick={() => (collapsed = false)}
-              />
+          <span class="chip-row" bind:this={chipRow}>
+            {#each visibleChips as chip, idx}
+              <span class="chip-slot" class:clipped={idx >= shownChipCount}>
+                {#if chip.kind === "image"}
+                  <ContextItemChip
+                    kind="image"
+                    number={chip.number}
+                    src={`data:${chip.image.media_type};base64,${chip.image.data}`}
+                    title="Open image #{chip.number}"
+                    onclick={() => openImagePreview(chip.image.data, chip.image.media_type)}
+                  />
+                {:else}
+                  <ContextItemChip
+                    kind="text"
+                    number={chip.number}
+                    text={chip.text}
+                    maxWidth={TEXT_CHIP_MAX_WIDTH}
+                    title={chip.text.slice(0, TEXT_CHIP_TITLE_CHARS)}
+                    onclick={() => (collapsed = false)}
+                  />
+                {/if}
+              </span>
+            {/each}
+            {#if hiddenChipCount > 0}
+              <span class="more-chips" bind:this={moreChipsLabel}>+{hiddenChipCount}</span>
             {/if}
-          {/each}
-          {#if hiddenChipCount > 0}
-            <span class="more-chips">+{hiddenChipCount}</span>
-          {/if}
+          </span>
         {/if}
       {/snippet}
       {#snippet actions()}
@@ -186,6 +220,8 @@
 
 <style>
   .context-inline {
+    flex-shrink: 0;
+    background: var(--accent-bg-soft);
     border-bottom: 1px solid var(--border-strong);
   }
 
@@ -198,18 +234,20 @@
     border-radius: 0;
   }
 
+  .context-inline :global(.collapsible-header),
+  .confirm-bar {
+    height: 40px;
+    padding: 0 var(--space-5) 0 calc(var(--chat-top-buttons-end) + var(--space-3));
+    transition: padding-left var(--motion-slow) var(--ease-default);
+  }
+
   .context-inline :global(.collapsible-header) {
     background: transparent;
-    padding: var(--space-3) var(--space-5);
     font-size: var(--font-size-md);
   }
 
   .context-inline :global(.collapsible-header:hover) {
     background: var(--surface-overlay-faint);
-  }
-
-  .context-inline :global(.collapsible-header.context-has-content) {
-    background: var(--accent-bg-soft);
   }
 
   .context-inline :global(.collapsible-header.context-has-content .collapsible-title) {
@@ -223,8 +261,30 @@
     overflow-y: auto;
   }
 
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    flex: 0 1 auto;
+    min-width: 0;
+    height: 20px;
+    overflow: hidden;
+  }
+
+  .chip-slot {
+    display: flex;
+    min-width: 0;
+  }
+
+  .chip-slot.clipped {
+    order: 2;
+    visibility: hidden;
+  }
+
   .more-chips {
+    order: 1;
     flex: none;
+    line-height: 20px;
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
     color: var(--text-muted);
@@ -236,7 +296,6 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
-    padding: var(--space-4) var(--space-5);
     background: var(--danger-bg-soft);
   }
 

@@ -18,8 +18,10 @@
 
   let {
     store,
+    belowContextBar = false,
   }: {
     store: ReturnType<typeof createConversationStore>;
+    belowContextBar?: boolean;
   } = $props();
 
   let container: HTMLDivElement | undefined = $state();
@@ -59,6 +61,7 @@
   class="conversation-area"
   role="presentation"
   class:scrolled
+  class:below-context-bar={belowContextBar}
   bind:this={container}
   bind:clientHeight={viewportHeight}
   style:--viewport-height="{viewportHeight}px"
@@ -118,9 +121,10 @@
 
 <style>
   .conversation-area {
+    --top-padding: 40px;
     flex: 1;
     overflow-y: auto;
-    padding: 40px var(--space-8) var(--space-8);
+    padding: var(--top-padding) var(--space-8) var(--space-8);
     display: flex;
     flex-direction: column;
     position: relative;
@@ -132,6 +136,11 @@
   .conversation-area.scrolled {
     border-top-color: var(--border-faint);
     box-shadow: inset 0 8px 12px -10px rgba(0, 0, 0, 0.55);
+  }
+
+  .conversation-area.below-context-bar {
+    --top-padding: var(--space-8);
+    border-top: none;
   }
 
   .messages-column {
@@ -152,7 +161,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
-    min-height: calc(var(--viewport-height) - 40px - var(--space-8));
+    min-height: calc(var(--viewport-height) - var(--top-padding) - var(--space-8));
   }
 
   .empty-state {

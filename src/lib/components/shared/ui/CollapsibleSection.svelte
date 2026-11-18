@@ -6,6 +6,7 @@
 
   let {
     title,
+    titleTooltip,
     collapsed = $bindable(false),
     headerClass,
     summary,
@@ -13,6 +14,7 @@
     children,
   }: {
     title: string;
+    titleTooltip?: string;
     collapsed: boolean;
     headerClass?: string;
     summary?: Snippet;
@@ -30,7 +32,7 @@
         <ChevronDown size={ICON_SIZE.md} />
       {/if}
     </span>
-    <span class="collapsible-title">{title}</span>
+    <span class="collapsible-title" title={titleTooltip}>{title}</span>
     {#if summary}
       <span class="collapsible-summary">{@render summary()}</span>
     {/if}

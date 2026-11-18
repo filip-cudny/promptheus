@@ -11,6 +11,7 @@
   import { getSkillsStore } from "$lib/stores/skills.svelte";
   import ChatPalette from "$lib/components/features/conversation-dialog/ChatPalette.svelte";
   import ChatTopButtons from "$lib/components/features/conversation-dialog/ChatTopButtons.svelte";
+  import ContextSection from "$lib/components/features/conversation-dialog/ContextSection.svelte";
   import ConversationArea from "$lib/components/features/conversation-dialog/ConversationArea.svelte";
   import InputArea from "$lib/components/features/conversation-dialog/InputArea.svelte";
   import TabSidebar from "$lib/components/features/conversation-dialog/TabSidebar.svelte";
@@ -338,24 +339,29 @@
   });
 </script>
 
-<div class="dialog-shell">
+<div class="dialog-shell" class:sidebar-open={sidebarOpen}>
   <ChatTopButtons
     {sidebarOpen}
     onToggleSidebar={() => (sidebarOpen = !sidebarOpen)}
     onNewChat={() => store.addTab()}
   />
-  <ConversationArea {store} />
+  {#if contextVisible}
+    <ContextSection
+      {store}
+      {contextDisabled}
+      initialCollapsed={contextInitialCollapsed}
+      onHasContent={handleContextAutoShow}
+      onClose={closeContext}
+    />
+  {/if}
+  <ConversationArea {store} belowContextBar={contextVisible} />
   <InputArea
     {store}
     {models}
-    {contextVisible}
     {contextDisabled}
-    {contextInitialCollapsed}
     {contextWindowSize}
     {defaultModelId}
     onSendAndCopy={handleSendAndCopy}
-    onContextAutoShow={handleContextAutoShow}
-    onCloseContext={closeContext}
     onToggleContext={toggleContext}
   />
   <TabSidebar {store} open={sidebarOpen} onClose={() => (sidebarOpen = false)} />
@@ -397,7 +403,11 @@
     z-index: 2147483647;
   }
 
+  /* --chat-top-buttons-end restates the geometry of ChatTopButtons (left offset 6px, 28px buttons, gap) and the
+     240px TabSidebar width, so the context bar's content starts after the buttons. It is wrong once either
+     component changes those values; then define them once here as custom properties read by all three. */
   .dialog-shell {
+    --chat-top-buttons-end: calc(6px + 28px + var(--space-2) + 28px);
     display: flex;
     flex-direction: column;
     height: 100vh;
@@ -407,5 +417,9 @@
     font-size: var(--font-size-base);
     overflow: hidden;
     position: relative;
+  }
+
+  .dialog-shell.sidebar-open {
+    --chat-top-buttons-end: calc(240px + 6px + var(--space-2) + 28px);
   }
 </style>

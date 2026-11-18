@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, onDestroy, tick, untrack } from "svelte";
-  import ContextSection from "./ContextSection.svelte";
   import AttachMenu from "./AttachMenu.svelte";
   import ActionIconButton from "$lib/components/shared/ui/ActionIconButton.svelte";
   import SkillEditable from "$lib/components/shared/widgets/SkillEditable.svelte";
@@ -31,25 +30,17 @@
   let {
     store,
     models = [],
-    contextVisible,
     contextDisabled,
-    contextInitialCollapsed = false,
     contextWindowSize = 0,
     onSendAndCopy,
-    onContextAutoShow,
-    onCloseContext,
     onToggleContext,
     defaultModelId = null,
   }: {
     store: ReturnType<typeof createConversationStore>;
     models?: ModelConfig[];
-    contextVisible: boolean;
     contextDisabled: boolean;
-    contextInitialCollapsed?: boolean;
     contextWindowSize?: number;
     onSendAndCopy: () => void;
-    onContextAutoShow: () => void;
-    onCloseContext: () => void;
     onToggleContext: () => void;
     defaultModelId?: string | null;
   } = $props();
@@ -240,7 +231,7 @@
 
   function handleInputAreaClick(e: MouseEvent) {
     const target = e.target as HTMLElement;
-    if (target.closest("button, .attach-menu, .model-selector, .autocomplete-dropdown, .context-inline, .attachment-row")) return;
+    if (target.closest("button, .attach-menu, .model-selector, .autocomplete-dropdown, .attachment-row")) return;
     skillEditable?.focus();
   }
 
@@ -251,10 +242,6 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div class="input-area" onclick={handleInputAreaClick}>
-  {#if contextVisible}
-    <ContextSection {store} {contextDisabled} initialCollapsed={contextInitialCollapsed} onHasContent={onContextAutoShow} onClose={onCloseContext} />
-  {/if}
-
   <div class="input-field">
     <AttachmentRow
       textAttachments={sync.localTextAttachments}
