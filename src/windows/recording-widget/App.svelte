@@ -467,9 +467,11 @@
       <div class="items" style:height="{itemsHeight(model.itemRows)}px" style:gap="{ITEM_ROW_GAP}px" data-tauri-drag-region>
         {#each imageItems as item (item.index)}
           <span class="chip image" style:gap="{CHIP_GAP}px" data-item-index={item.index}>
-            <span class="thumb" class:ring={item.thumbnail}>
-              {#if item.thumbnail}<img src={item.thumbnail} alt="" />{:else}<ImageIcon size={12} />{/if}
-            </span>
+            {#if item.thumbnail}
+              <span class="thumb"><img src={item.thumbnail} alt="" /></span>
+            {:else}
+              <ImageIcon size={12} />
+            {/if}
             <span class="chip-number">{item.label}</span>
             {@render removeButton(item)}
           </span>
@@ -801,9 +803,6 @@
     height: 16px;
     border-radius: 4px;
     overflow: hidden;
-  }
-
-  .thumb.ring {
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
   }
 
