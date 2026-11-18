@@ -8,7 +8,6 @@
     title,
     titleTooltip,
     collapsed = $bindable(false),
-    headerClass,
     summary,
     actions,
     children,
@@ -16,7 +15,6 @@
     title: string;
     titleTooltip?: string;
     collapsed: boolean;
-    headerClass?: string;
     summary?: Snippet;
     actions?: Snippet;
     children: Snippet;
@@ -24,15 +22,17 @@
 </script>
 
 <div class="collapsible-section">
-  <button class="collapsible-header {headerClass ?? ''}" onclick={() => (collapsed = !collapsed)}>
-    <span class="collapse-arrow">
-      {#if collapsed}
-        <ChevronRight size={ICON_SIZE.md} />
-      {:else}
-        <ChevronDown size={ICON_SIZE.md} />
-      {/if}
+  <button class="collapsible-header" onclick={() => (collapsed = !collapsed)}>
+    <span class="collapsible-label" title={titleTooltip}>
+      <span class="collapse-arrow">
+        {#if collapsed}
+          <ChevronRight size={ICON_SIZE.md} />
+        {:else}
+          <ChevronDown size={ICON_SIZE.md} />
+        {/if}
+      </span>
+      <span class="collapsible-title">{title}</span>
     </span>
-    <span class="collapsible-title" title={titleTooltip}>{title}</span>
     {#if summary}
       <span class="collapsible-summary">{@render summary()}</span>
     {/if}
@@ -75,6 +75,14 @@
 
   .collapsible-header:hover {
     background: var(--surface-overlay);
+  }
+
+  .collapsible-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    flex: 0 1 auto;
+    min-width: 0;
   }
 
   .collapse-arrow {

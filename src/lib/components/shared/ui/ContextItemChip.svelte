@@ -81,9 +81,9 @@
     height: 20px;
     padding: 0 7px 0 2px;
     gap: 5px;
-    border: 1px solid var(--border-strong);
+    border: 1px solid transparent;
     border-radius: var(--radius-lg);
-    background: rgba(0, 0, 0, 0.25);
+    background: var(--surface-overlay);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
     color: var(--text-primary);
@@ -95,7 +95,7 @@
   }
 
   .context-item-chip:hover {
-    border-color: var(--accent-border);
+    background: var(--surface-overlay-strong);
   }
 
   .chip-body {

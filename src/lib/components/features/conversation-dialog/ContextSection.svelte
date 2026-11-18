@@ -49,7 +49,6 @@
   let fittingChipCount = $state(MAX_HEADER_CHIPS);
   let shownChipCount = $derived(Math.min(fittingChipCount, visibleChips.length));
   let hiddenChipCount = $derived(headerChips.length - shownChipCount);
-  let contextHeaderClass = $derived(collapsed && hasContent ? "context-has-content" : "");
 
   $effect(() => {
     store.updateContextText(localText);
@@ -142,7 +141,7 @@
   }
 </script>
 
-<div class="context-inline" class:disabled={contextDisabled}>
+<div class="context-inline" class:disabled={contextDisabled} class:has-content={hasContent}>
   {#if confirming}
     <div class="confirm-bar">
       <span class="confirm-text">
@@ -156,9 +155,8 @@
   {:else}
     <CollapsibleSection
       title="Context"
-      titleTooltip="Sent with every message in this conversation"
+      titleTooltip="Attached to every message in this conversation. Click to edit."
       bind:collapsed
-      headerClass={contextHeaderClass}
     >
       {#snippet summary()}
         {#if collapsed && hasContent}
@@ -226,8 +224,11 @@
   .context-inline {
     position: relative;
     flex-shrink: 0;
-    background: var(--accent-bg-soft);
     border-bottom: 1px solid var(--border-strong);
+  }
+
+  .context-inline.has-content {
+    box-shadow: inset 2px 0 0 var(--accent);
   }
 
   .context-inline::before {
@@ -266,9 +267,16 @@
     background: var(--surface-overlay-faint);
   }
 
-  .context-inline :global(.collapsible-header.context-has-content .collapsible-title) {
-    color: var(--info);
-    font-weight: 700;
+  .context-inline :global(.collapsible-title) {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .context-inline :global(.collapsible-header:not(:hover) .collapsible-actions) {
+    opacity: 0.5;
   }
 
   .context-inline :global(.collapsible-content) {
