@@ -1394,7 +1394,7 @@ fn settings_json_without_env_vars() -> serde_json::Value {
         test_model("m1", "${OPENAI_API_KEY}"),
         test_model("m2", "${OPENAI_API_KEY}"),
         test_model("m3", "${OPENAI_API_KEY}"),
-        test_model("m4", "${ENIGMA_API_KEY}"),
+        test_model("m4", "${GATEWAY_API_KEY}"),
         test_model("m5", "${OPENROUTER_API_KEY}"),
         test_stt_model("m6", "${ELEVENLABS_API_KEY}"),
     ];
@@ -1442,7 +1442,7 @@ fn env_vars_are_seeded_from_references_when_the_key_is_absent() {
         secret,
         [
             "ELEVENLABS_API_KEY",
-            "ENIGMA_API_KEY",
+            "GATEWAY_API_KEY",
             "OPENAI_API_KEY",
             "OPENROUTER_API_KEY",
             "TAVILY_API_KEY"
