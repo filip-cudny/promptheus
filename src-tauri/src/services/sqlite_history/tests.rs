@@ -532,6 +532,132 @@ fn quick_action_query() {
     assert_eq!(last_quick.input_preview, "quick");
 }
 
+fn add_quick(svc: &SqliteHistoryService, text: &str, entry_type: HistoryEntryType) -> String {
+    svc.add_entry(text.into(), entry_type, None, None, true, None, false, None, true, None)
+        .unwrap()
+}
+
+fn set_timestamps(svc: &SqliteHistoryService, id: &str, created_at: &str, updated_at: Option<&str>) {
+    svc.conn()
+        .execute(
+            "UPDATE conversations SET created_at = ?2, updated_at = ?3 WHERE id = ?1",
+            rusqlite::params![id, created_at, updated_at],
+        )
+        .unwrap();
+}
+
+#[test]
+fn get_recent_quick_actions_returns_only_quick_rows_of_both_types() {
+    let svc = make_svc();
+    add_plain(&svc, "plain text");
+    svc.add_entry("plain speech".into(), HistoryEntryType::Speech, None, None, true, None, false, None, false, None);
+    add_quick(&svc, "quick text", HistoryEntryType::Text);
+    add_quick(&svc, "quick speech", HistoryEntryType::Speech);
+
+    let inputs: Vec<String> = svc
+        .get_recent_quick_actions(10)
+        .into_iter()
+        .map(|e| e.input_preview)
+        .collect();
+
+    assert_eq!(inputs, vec!["quick speech", "quick text"]);
+}
+
+#[test]
+fn get_recent_quick_actions_orders_by_updated_at_then_created_at() {
+    let svc = make_svc();
+    let oldest = add_quick(&svc, "oldest", HistoryEntryType::Text);
+    let middle = add_quick(&svc, "middle", HistoryEntryType::Speech);
+    let newest = add_quick(&svc, "newest", HistoryEntryType::Text);
+    set_timestamps(&svc, &oldest, "2026-01-01 10:00:00", Some("2026-01-03 10:00:00"));
+    set_timestamps(&svc, &middle, "2026-01-02 10:00:00", None);
+    set_timestamps(&svc, &newest, "2026-01-01 12:00:00", None);
+
+    let ids: Vec<String> = svc.get_recent_quick_actions(10).into_iter().map(|e| e.id).collect();
+
+    assert_eq!(ids, vec![oldest, middle, newest]);
+}
+
+#[test]
+fn get_recent_quick_actions_breaks_equal_timestamps_by_later_insert() {
+    let svc = make_svc();
+    let first = add_quick(&svc, "first", HistoryEntryType::Text);
+    let second = add_quick(&svc, "second", HistoryEntryType::Speech);
+    set_timestamps(&svc, &first, "2026-01-01 10:00:00", None);
+    set_timestamps(&svc, &second, "2026-01-01 10:00:00", None);
+
+    let ids: Vec<String> = svc.get_recent_quick_actions(10).into_iter().map(|e| e.id).collect();
+
+    assert_eq!(ids, vec![second, first]);
+}
+
+#[test]
+fn get_recent_quick_actions_returns_at_most_limit_rows() {
+    let svc = make_svc();
+    for i in 0..5 {
+        add_quick(&svc, &format!("entry {i}"), HistoryEntryType::Text);
+    }
+
+    assert_eq!(svc.get_recent_quick_actions(3).len(), 3);
+    assert_eq!(svc.get_recent_quick_actions(0).len(), 0);
+}
+
+fn add_failed_speech(svc: &SqliteHistoryService) -> String {
+    svc.add_entry(
+        "Voice note · 0:07 — transcription failed".into(),
+        HistoryEntryType::Speech,
+        None,
+        None,
+        false,
+        Some("network".into()),
+        false,
+        None,
+        true,
+        None,
+    )
+    .unwrap()
+}
+
+#[test]
+fn resolve_copyable_part_returns_full_output_beyond_the_capped_preview() {
+    let svc = make_svc();
+    let long_answer = "z".repeat(5000);
+    let id = svc.add_conversation_entry(
+        "context".into(),
+        None,
+        None,
+        true,
+        None,
+        make_nodes("prompt", &long_answer),
+        Some("u1".into()),
+        vec!["u1".into(), "a1".into()],
+        true,
+        None,
+        vec![],
+        None,
+        None,
+        InvocationSource::ContextMenu,
+        OutputRoute::Clipboard,
+    );
+
+    assert_eq!(
+        svc.resolve_copyable_part(&id, HistoryContentPart::Output),
+        Some(long_answer),
+    );
+}
+
+#[test]
+fn resolve_copyable_part_has_no_output_for_a_failed_row_but_keeps_its_input() {
+    let svc = make_svc();
+    let id = add_failed_speech(&svc);
+
+    assert_eq!(svc.resolve_copyable_part(&id, HistoryContentPart::Output), None);
+    assert_eq!(
+        svc.resolve_copyable_part(&id, HistoryContentPart::Input),
+        Some("Voice note · 0:07 — transcription failed".to_string()),
+    );
+}
+
 #[test]
 fn vacuum_reclaims_free_pages_after_bulk_delete() {
     let svc = SqliteHistoryService::new(make_db(), 0);

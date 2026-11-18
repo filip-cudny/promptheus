@@ -323,6 +323,43 @@ impl SqliteHistoryService {
         self.db.conn().query_row(&sql, [entry_type_str(&entry_type)], row_to_entry).ok()
     }
 
+    pub fn get_recent_quick_actions(&self, limit: u32) -> Vec<HistoryEntry> {
+        let sql = format!(
+            "SELECT {ENTRY_COLUMNS} FROM conversations WHERE quick_action = 1
+             ORDER BY COALESCE(updated_at, created_at) DESC, rowid DESC LIMIT ?1"
+        );
+        let conn = self.db.conn();
+        let mut stmt = conn.prepare(&sql).unwrap();
+        stmt.query_map([limit], row_to_entry)
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect()
+    }
+
+    /// Like `resolve_full_content`, but a failed row has no copyable Output, so
+    /// a failed recording's placeholder never reaches the clipboard.
+    pub fn resolve_copyable_part(
+        &self,
+        entry_id: &str,
+        part: HistoryContentPart,
+    ) -> Option<String> {
+        if part == HistoryContentPart::Output {
+            let success: bool = self
+                .db
+                .conn()
+                .query_row(
+                    "SELECT success FROM conversations WHERE id = ?1",
+                    [entry_id],
+                    |row| row.get(0),
+                )
+                .ok()?;
+            if !success {
+                return None;
+            }
+        }
+        self.resolve_full_content(entry_id, part)
+    }
+
     /// Full stored text of one side of an entry, bypassing the capped
     /// `input_preview` / `output_preview` columns. Reads the conversation tree
     /// without loading attached images; falls back to the preview column for

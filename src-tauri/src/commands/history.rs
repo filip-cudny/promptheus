@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -14,6 +14,7 @@ use crate::services::conversation_context::ConversationContextCache;
 use crate::services::history_events::emit_history_changed;
 use crate::services::history_search::{HistorySearch, SearchQuery, SearchResponse};
 use crate::services::skill::{strip_skill_prefix, SkillService};
+use crate::services::speech::{AudioClipStore, SpeechService};
 use crate::services::sqlite_history::{HistoryStorageStats, SqliteHistoryService};
 
 #[derive(Debug, Clone, Serialize)]
@@ -27,6 +28,21 @@ pub struct SkillCount {
 pub struct LastInteractionData {
     pub last_text: Option<HistoryEntry>,
     pub last_speech: Option<HistoryEntry>,
+}
+
+const PREVIEW_MAX_CHARS: usize = 200;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RecentQuickAction {
+    pub id: String,
+    pub entry_type: HistoryEntryType,
+    pub skill_id: Option<String>,
+    pub skill_name: Option<String>,
+    pub timestamp: String,
+    pub input_preview: String,
+    pub output_preview: Option<String>,
+    pub status: String,
+    pub has_audio: bool,
 }
 
 #[tauri::command]
@@ -282,6 +298,113 @@ pub async fn copy_last_interaction(
     Ok(())
 }
 
+fn cap_preview(text: &str) -> String {
+    if text.chars().count() <= PREVIEW_MAX_CHARS {
+        return text.to_string();
+    }
+    let mut capped: String = text.chars().take(PREVIEW_MAX_CHARS - 1).collect();
+    capped.push('…');
+    capped
+}
+
+fn build_recent_quick_actions(
+    entries: Vec<HistoryEntry>,
+    retrying: &HashSet<String>,
+    with_audio: &HashSet<String>,
+    skill_service: &SkillService,
+) -> Vec<RecentQuickAction> {
+    entries
+        .into_iter()
+        .map(|entry| {
+            let status = match (entry.success, retrying.contains(&entry.id)) {
+                (true, _) => "ok",
+                (false, true) => "retrying",
+                (false, false) => "failed",
+            };
+            RecentQuickAction {
+                input_preview: cap_preview(strip_skill_prefix(&entry.input_preview, skill_service)),
+                output_preview: entry.output_preview.as_deref().map(cap_preview),
+                timestamp: entry
+                    .updated_at
+                    .or(entry.created_at)
+                    .unwrap_or(entry.timestamp),
+                status: status.to_string(),
+                has_audio: with_audio.contains(&entry.id),
+                id: entry.id,
+                entry_type: entry.entry_type,
+                skill_id: entry.skill_id,
+                skill_name: entry.skill_name,
+            }
+        })
+        .collect()
+}
+
+/// Newest quick-action entries of both types, with previews only. `has_audio`
+/// is set for failed speech rows whose recording is still on disk.
+#[tauri::command]
+pub async fn get_recent_quick_actions(
+    speech: State<'_, Arc<Mutex<SpeechService>>>,
+    history: State<'_, Arc<Mutex<SqliteHistoryService>>>,
+    skill_service: State<'_, Arc<Mutex<SkillService>>>,
+    clips: State<'_, Arc<AudioClipStore>>,
+    limit: u32,
+) -> crate::Result<Vec<RecentQuickAction>> {
+    let retrying = speech.lock().await.retrying_entries();
+
+    let (entries, with_audio) = {
+        let history = history.lock().await;
+        let entries = history.get_recent_quick_actions(limit);
+        let with_audio: HashSet<String> = entries
+            .iter()
+            .filter(|e| !e.success && e.entry_type == HistoryEntryType::Speech)
+            .filter(|e| {
+                clips
+                    .find_by_entry(history.conn(), &e.id)
+                    .is_some_and(|clip| clip.path.exists())
+            })
+            .map(|e| e.id.clone())
+            .collect();
+        (entries, with_audio)
+    };
+
+    let rows =
+        build_recent_quick_actions(entries, &retrying, &with_audio, &*skill_service.lock().await);
+    log::debug!("get_recent_quick_actions: returned {} rows", rows.len());
+    Ok(rows)
+}
+
+fn part_clipboard_text(
+    resolved: String,
+    part: HistoryContentPart,
+    skill_service: &SkillService,
+) -> String {
+    match part {
+        HistoryContentPart::Input => strip_skill_prefix(&resolved, skill_service).to_string(),
+        HistoryContentPart::Output => resolved,
+    }
+}
+
+/// Copies the full text of one part of one entry. Returns `false` when there is
+/// nothing to copy (unknown entry, or the Output of a failed row).
+#[tauri::command]
+pub async fn copy_history_entry_part(
+    clipboard: State<'_, ClipboardService>,
+    history: State<'_, Arc<Mutex<SqliteHistoryService>>>,
+    skill_service: State<'_, Arc<Mutex<SkillService>>>,
+    entry_id: String,
+    part: HistoryContentPart,
+) -> crate::Result<bool> {
+    let resolved = history.lock().await.resolve_copyable_part(&entry_id, part);
+
+    let Some(resolved) = resolved else {
+        return Ok(false);
+    };
+
+    let content = part_clipboard_text(resolved, part, &*skill_service.lock().await);
+    clipboard.set_text(&content)?;
+    Ok(true)
+}
+
 /// Copies a history entry's response, falling back to its prompt when the entry
 /// has no response. Resolves the full text rather than the capped preview the
 /// list view renders.
@@ -306,6 +429,28 @@ pub async fn copy_history_entry_content(
 mod tests {
     use super::*;
     use crate::models::history::HistoryEntryType;
+    use tempfile::TempDir;
+
+    fn skill_service_with_translate() -> (TempDir, SkillService) {
+        let dir = TempDir::new().unwrap();
+        let skills_dir = dir.path().join("skills");
+        let skill_dir = skills_dir.join("translate");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: translate\ndescription: desc\n---\n\nbody\n",
+        )
+        .unwrap();
+        let service = SkillService::load(&skills_dir, &[]).unwrap();
+        (dir, service)
+    }
+
+    fn build_one(entry: HistoryEntry, retrying: &[&str]) -> RecentQuickAction {
+        let (_dir, skills) = skill_service_with_translate();
+        let retrying = retrying.iter().map(|s| s.to_string()).collect();
+        build_recent_quick_actions(vec![entry], &retrying, &HashSet::new(), &skills)
+            .remove(0)
+    }
 
     fn make_entry(id: &str, skill_id: Option<&str>, skill_name: Option<&str>) -> HistoryEntry {
         HistoryEntry {
@@ -374,5 +519,77 @@ mod tests {
         assert_eq!(counts[0].skill_id, "translate");
         assert_eq!(counts[0].skill_name, "Translate");
         assert_eq!(counts[0].count, 1);
+    }
+
+    #[test]
+    fn recent_row_strips_a_known_skill_prefix_from_the_input() {
+        let mut entry = make_entry("a", None, None);
+        entry.input_preview = "/translate hello".into();
+
+        assert_eq!(build_one(entry, &[]).input_preview, "hello");
+    }
+
+    #[test]
+    fn recent_row_caps_previews_at_200_chars_including_multibyte() {
+        let mut entry = make_entry("a", None, None);
+        entry.input_preview = "ą".repeat(300);
+        entry.output_preview = Some("ż€".repeat(150));
+
+        let row = build_one(entry, &[]);
+
+        assert_eq!(row.input_preview.chars().count(), 200);
+        assert!(row.input_preview.ends_with('…'));
+        let output = row.output_preview.unwrap();
+        assert_eq!(output.chars().count(), 200);
+        assert!(output.ends_with('…'));
+    }
+
+    #[test]
+    fn recent_row_keeps_a_preview_of_exactly_200_chars_whole() {
+        let mut entry = make_entry("a", None, None);
+        entry.input_preview = "ą".repeat(200);
+
+        assert_eq!(build_one(entry, &[]).input_preview, "ą".repeat(200));
+    }
+
+    #[test]
+    fn recent_row_status_is_failed_retrying_or_ok() {
+        let mut failed = make_entry("failed", None, None);
+        failed.success = false;
+        let mut retrying = make_entry("retrying", None, None);
+        retrying.success = false;
+        let ok = make_entry("ok", None, None);
+
+        assert_eq!(build_one(failed, &["retrying"]).status, "failed");
+        assert_eq!(build_one(retrying, &["retrying"]).status, "retrying");
+        assert_eq!(build_one(ok, &["ok"]).status, "ok");
+    }
+
+    #[test]
+    fn recent_row_timestamp_prefers_updated_at_then_created_at_then_timestamp() {
+        let mut entry = make_entry("a", None, None);
+        entry.updated_at = Some("2026-02-02 00:00:00".into());
+        assert_eq!(build_one(entry.clone(), &[]).timestamp, "2026-02-02 00:00:00");
+
+        entry.updated_at = None;
+        assert_eq!(build_one(entry.clone(), &[]).timestamp, "2026-01-01 00:00:00");
+
+        entry.created_at = None;
+        entry.timestamp = "2026-03-03 00:00:00".into();
+        assert_eq!(build_one(entry, &[]).timestamp, "2026-03-03 00:00:00");
+    }
+
+    #[test]
+    fn part_clipboard_text_strips_the_prefix_for_input_only() {
+        let (_dir, skills) = skill_service_with_translate();
+
+        assert_eq!(
+            part_clipboard_text("/translate hello".into(), HistoryContentPart::Input, &skills),
+            "hello",
+        );
+        assert_eq!(
+            part_clipboard_text("/translate hello".into(), HistoryContentPart::Output, &skills),
+            "/translate hello",
+        );
     }
 }

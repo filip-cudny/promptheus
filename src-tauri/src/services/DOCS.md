@@ -159,6 +159,10 @@ Persistent history storage via SQLite. Database file at `{app_data_dir}/history.
 
 **Sorting**: `get_history()` returns entries ordered by `COALESCE(updated_at, created_at) DESC, rowid DESC`.
 
+**Recent quick actions**: `get_recent_quick_actions(limit)` returns the newest `quick_action = 1` rows of both entry types, ordered like `get_history()` with `LIMIT`; `idx_conversations_updated` covers that order.
+
+**Copyable part**: `resolve_copyable_part(id, part)` is `resolve_full_content` except that the Output of a `success = 0` row is `None`, so a failed recording's placeholder never reaches the clipboard.
+
 **Simple entries**: `add_entry()` inserts a single prompt execution (no tree_json).
 
 **Conversation entries**: `add_conversation_entry()` serializes nodes/tree as JSON into `tree_json`, inserts images as BLOBs in a single transaction. Returns the entry ID. `update_conversation_entry()` replaces tree_json and re-inserts all images in a transaction.

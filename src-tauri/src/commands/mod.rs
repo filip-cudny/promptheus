@@ -102,6 +102,8 @@ macro_rules! handlers {
             $crate::commands::history::get_history_storage_stats,
             $crate::commands::history::compact_history_database,
             $crate::commands::history::copy_last_interaction,
+            $crate::commands::history::get_recent_quick_actions,
+            $crate::commands::history::copy_history_entry_part,
             $crate::commands::history::copy_history_entry_content,
             $crate::commands::history::update_history_entry_title,
             $crate::commands::history::search_history,
