@@ -1,8 +1,9 @@
 <p align="center">
-  <img src="src-tauri/icons/logo.svg" alt="Promptheus logo" width="96">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/readme-header-dark.svg">
+    <img src="docs/readme-header-light.svg" alt="Promptheus" width="409">
+  </picture>
 </p>
-
-# Promptheus
 
 A tray-resident AI prompt launcher for Linux and macOS: a global hotkey opens a context menu of your prompts over the selected text, next to a streaming LLM chat, speech-to-text dictation with a recording pill, MCP tools, ChatGPT and Claude web apps in tabs, and searchable history.
 
