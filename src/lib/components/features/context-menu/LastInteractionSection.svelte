@@ -1,30 +1,41 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import {
     Copy,
     Check,
     History,
+    ChevronDown,
     CircleAlert,
     RotateCcw,
     LoaderCircle,
   } from "lucide-svelte";
+  import { debug as logDebug, error as logError } from "@tauri-apps/plugin-log";
   import { ICON_SIZE } from "$lib/constants/ui";
   import { useCopyFeedback } from "$lib/utils/copyFeedback.svelte";
-  import SectionHeader from "./components/SectionHeader.svelte";
   import ActionIconButton from "$lib/components/shared/ui/ActionIconButton.svelte";
   import Chip from "$lib/components/shared/ui/Chip.svelte";
+  import RecentInteractionList from "./components/RecentInteractionList.svelte";
   import type { LastInteractionData } from "./itemExtractors";
-  import type { LastInteractionChip } from "$lib/services/history";
+  import type { LastInteractionChip, RecentQuickAction } from "$lib/services/history";
 
   let {
     data,
+    listOpen = $bindable(false),
     onCopyChip,
     onOpenHistory,
     onRetryTranscription,
+    onFetchRecent,
+    onCopyPart,
+    onOpenInChat,
   }: {
     data: LastInteractionData | null;
+    listOpen?: boolean;
     onCopyChip: (chip: LastInteractionChip) => Promise<void>;
     onOpenHistory: () => Promise<void>;
     onRetryTranscription: (entryId: string) => Promise<void>;
+    onFetchRecent: () => Promise<RecentQuickAction[]>;
+    onCopyPart: (entryId: string, part: "input" | "output") => Promise<boolean>;
+    onOpenInChat: (row: RecentQuickAction) => void;
   } = $props();
 
   const copyFeedback = useCopyFeedback<LastInteractionChip>();
@@ -35,15 +46,25 @@
     copyFeedback.flash(chip);
   }
 
-  type ChipEntry = { type: LastInteractionChip; label: string; preview: string | null };
+  type ChipEntry = { type: LastInteractionChip; label: string; preview: string | null; title: string };
 
   let transcription = $derived(data?.transcription ?? null);
   let transcriptionFailed = $derived(transcription?.status === "failed");
   let transcriptionRetrying = $derived(transcription?.status === "retrying");
 
   let chips = $derived<ChipEntry[]>([
-    { type: "input", label: "Input", preview: data?.input?.preview ?? null },
-    { type: "output", label: "Output", preview: data?.output?.preview ?? null },
+    {
+      type: "input",
+      label: "Input",
+      preview: data?.input?.preview ?? null,
+      title: "Copy the last quick action's input",
+    },
+    {
+      type: "output",
+      label: "Output",
+      preview: data?.output?.preview ?? null,
+      title: "Copy the last quick action's output",
+    },
   ]);
 
   let transcriptionTitle = $derived.by(() => {
@@ -54,37 +75,48 @@
         ? `${reason} — audio kept, retry available`
         : `${reason} — audio no longer available`;
     }
-    return transcription?.preview ?? "No content";
+    return "Copy the last transcript";
   });
-
-  let hasAnyContent = $derived(
-    chips.some((c) => c.preview !== null) || transcription !== null,
-  );
 
   async function handleRetry() {
     if (!transcription?.entry_id || !transcription.has_audio) return;
     await onRetryTranscription(transcription.entry_id);
   }
+
+  let recentRows = $state<RecentQuickAction[] | null>(null);
+  let fetchSequence = 0;
+
+  async function refreshRecent() {
+    const sequence = ++fetchSequence;
+    try {
+      const fetched = await onFetchRecent();
+      if (sequence !== fetchSequence) return;
+      recentRows = fetched;
+      logDebug(`[last-interaction] fetched ${fetched.length} recent rows`);
+    } catch (e) {
+      logError(`[last-interaction] fetching recent rows failed: ${e}`);
+    }
+  }
+
+  $effect(() => {
+    if (!listOpen) {
+      fetchSequence++;
+      recentRows = null;
+      return;
+    }
+    void data;
+    untrack(refreshRecent);
+  });
 </script>
 
 <div class="last-interaction-section">
-  <SectionHeader title="Last interaction">
-    {#snippet actions()}
-      <ActionIconButton
-        icon={History}
-        onclick={onOpenHistory}
-        label="View execution history"
-      />
-    {/snippet}
-  </SectionHeader>
-
-  {#if hasAnyContent}
+  <div class="row">
     <div class="chips">
       {#each chips as chip}
         <Chip
           onclick={() => handleCopy(chip.type, chip.preview !== null)}
           disabled={!chip.preview}
-          title={chip.preview ?? "No content"}
+          title={chip.title}
         >
           <span class="chip-copy">
             {#if copyFeedback.confirmed === chip.type}
@@ -115,7 +147,7 @@
             {/if}
           </span>
           <span class="chip-label">
-            {transcriptionRetrying ? "Retrying…" : "Transcription"}
+            {transcriptionRetrying ? "Retrying…" : "Transcript"}
           </span>
         </Chip>
 
@@ -124,6 +156,30 @@
         {/if}
       </div>
     </div>
+
+    <div class="tools">
+      <ActionIconButton
+        icon={ChevronDown}
+        active={listOpen}
+        onclick={() => (listOpen = !listOpen)}
+        label="Earlier items"
+      />
+      <ActionIconButton
+        icon={History}
+        onclick={onOpenHistory}
+        label="View execution history"
+      />
+    </div>
+  </div>
+
+  {#if listOpen}
+    <RecentInteractionList
+      rows={recentRows}
+      {onCopyPart}
+      {onOpenInChat}
+      onRetry={onRetryTranscription}
+      onClose={() => (listOpen = false)}
+    />
   {/if}
 </div>
 
@@ -132,11 +188,26 @@
     padding: var(--space-1) var(--space-0);
   }
 
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4) var(--space-2) var(--space-6);
+  }
+
   .chips {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: var(--space-2);
-    padding: var(--space-2) var(--space-6) var(--space-3);
+  }
+
+  .tools {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: auto;
   }
 
   .chip-copy {

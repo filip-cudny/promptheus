@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { SearchQuery, SearchResponse } from "$lib/types/historySearch";
 import type {
   HistoryEntry,
+  HistoryEntryType,
   InvocationSource,
   ImagePayload,
   SerializedConversationNode,
@@ -85,6 +86,30 @@ export type LastInteractionChip = "input" | "output" | "transcription";
  */
 export async function copyLastInteraction(chip: LastInteractionChip): Promise<void> {
   return invoke("copy_last_interaction", { chip });
+}
+
+export interface RecentQuickAction {
+  id: string;
+  entry_type: HistoryEntryType;
+  skill_id: string | null;
+  skill_name: string | null;
+  timestamp: string;
+  input_preview: string;
+  output_preview: string | null;
+  status: "ok" | "failed" | "retrying";
+  has_audio: boolean;
+}
+
+export async function getRecentQuickActions(limit: number): Promise<RecentQuickAction[]> {
+  return invoke("get_recent_quick_actions", { limit });
+}
+
+/** Resolves to false when nothing was copied (the Output of a failed row). */
+export async function copyHistoryEntryPart(
+  entryId: string,
+  part: "input" | "output",
+): Promise<boolean> {
+  return invoke<boolean>("copy_history_entry_part", { entryId, part });
 }
 
 /** Copies a history entry's full response (or its prompt, when there is none). */

@@ -11,7 +11,8 @@
   import ContextSection from "./ContextSection.svelte";
   import LastInteractionSection from "./LastInteractionSection.svelte";
   import FloatingPanel from "$lib/components/shared/ui/FloatingPanel.svelte";
-  import { focusOrOpenChat } from "$lib/services/conversationDialog";
+  import { error as logError } from "@tauri-apps/plugin-log";
+  import { focusOrOpenChat, openConversationDialog } from "$lib/services/conversationDialog";
   import { newTab } from "$lib/services/tabs";
   import { openImagePreview } from "$lib/services/windowPreviews";
   import {
@@ -22,7 +23,14 @@
     removeContextItem,
   } from "$lib/services/context";
   import { openContextEditor } from "$lib/services/contextEditor";
-  import { copyLastInteraction, type LastInteractionChip } from "$lib/services/history";
+  import {
+    copyHistoryEntryPart,
+    copyLastInteraction,
+    getHistoryEntry,
+    getRecentQuickActions,
+    type LastInteractionChip,
+    type RecentQuickAction,
+  } from "$lib/services/history";
   import { retryTranscription } from "$lib/services/speech";
   import { openHistoryDialog } from "$lib/services/historyDialog";
   import { openSettingsWindow } from "$lib/services/settingsDialog";
@@ -45,6 +53,8 @@
   import { fetchSkillMetadata, buildSkillMetaEntries } from "$lib/services/skillMetadata.svelte";
   import { createWebviewProvidersStore } from "$lib/stores/webviewProviders.svelte";
   import { useModelsMenuData } from "$lib/stores/modelsMenuData.svelte";
+
+  const RECENT_LIMIT = 100;
 
   const panels = useFloatingPanelMutex({
     onSettingsClose: menu.resumeClose,
@@ -128,18 +138,39 @@
     }
   }
 
+  let recentListOpen = $state(false);
+  let previousRecentListOpen = false;
+
   $effect(() => {
     void menu.getOpenTrigger();
     if (menuVisible && menuItems.length > 0) {
       untrack(() => panels.closeAll());
-      void positioning.triggerReposition();
+      if (untrack(() => recentListOpen)) {
+        void positioning.resizeKeepingTop();
+      } else {
+        void positioning.triggerReposition();
+      }
     }
+  });
+
+  $effect(() => {
+    const open = recentListOpen;
+    if (open === previousRecentListOpen) return;
+    previousRecentListOpen = open;
+    untrack(() => {
+      if (menu.isVisible()) void positioning.resizeKeepingTop();
+    });
   });
 
   let sections = $derived(groupBySection(menu.getItems()));
 
   let menuVisible = $derived(menu.isVisible());
-  $effect(() => { if (!menuVisible) panels.closeAll(); });
+  $effect(() => {
+    if (!menuVisible) {
+      panels.closeAll();
+      recentListOpen = false;
+    }
+  });
 
   let menuItems = $derived(menu.getItems());
   let allSkillItems = $derived(menu.getAllSkillItems());
@@ -174,6 +205,26 @@
   async function handleOpenHistory() {
     await menu.closeMenu(false);
     await openHistoryDialog();
+  }
+
+  function handleFetchRecent() {
+    return getRecentQuickActions(RECENT_LIMIT);
+  }
+
+  async function handleOpenRecentInChat(row: RecentQuickAction) {
+    await menu.closeMenu(false);
+    try {
+      if (row.entry_type === "text") {
+        await openConversationDialog(row.skill_id ?? "", row.skill_name ?? "", row.id);
+        return;
+      }
+      const entry = await getHistoryEntry(row.id);
+      if (entry?.output_preview) {
+        await openConversationDialog("", "", undefined, entry.output_preview, false, false, null, "chat");
+      }
+    } catch (err) {
+      logError(`[last-interaction] open in chat failed: ${err}`);
+    }
   }
 
   async function handleRetryTranscription(entryId: string) {
@@ -290,9 +341,13 @@
         {:else if lastInteractionData !== null}
           <LastInteractionSection
             data={lastInteractionData}
+            bind:listOpen={recentListOpen}
             onCopyChip={handleCopyChip}
             onOpenHistory={handleOpenHistory}
             onRetryTranscription={handleRetryTranscription}
+            onFetchRecent={handleFetchRecent}
+            onCopyPart={copyHistoryEntryPart}
+            onOpenInChat={handleOpenRecentInChat}
           />
         {:else}
           {@const executingThis = item.item_type === "skill" && isExecutingSkill(item)}

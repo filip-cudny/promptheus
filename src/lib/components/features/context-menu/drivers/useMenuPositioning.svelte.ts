@@ -23,9 +23,23 @@ type Opts = {
   getWorkArea: () => WorkArea | null;
 };
 
+function clampOrigin(wa: WorkArea, anchorX: number, anchorY: number, height: number) {
+  return invoke<[number, number]>("clamp_menu_origin", {
+    anchorX,
+    anchorY,
+    width: MENU_WIDTH,
+    height,
+    workX: wa.workX,
+    workY: wa.workY,
+    workWidth: wa.workWidth,
+    workHeight: wa.workHeight,
+  });
+}
+
 export function useMenuPositioning(opts: Opts) {
   let hoverEnabled = $state(false);
   let resizeGeneration = 0;
+  let placedOrigin: [number, number] | null = null;
 
   function getSkillsAnchorOffset(): number {
     const menuEl = opts.getMenuEl();
@@ -49,17 +63,8 @@ export function useMenuPositioning(opts: Opts) {
 
     async function positionFromHeight(h: number) {
       if (!wa) return;
-      const anchorOffset = getSkillsAnchorOffset();
-      [x, y] = await invoke<[number, number]>("clamp_menu_origin", {
-        anchorX: wa.cursorX,
-        anchorY: wa.cursorY - anchorOffset,
-        width: MENU_WIDTH,
-        height: h,
-        workX: wa.workX,
-        workY: wa.workY,
-        workWidth: wa.workWidth,
-        workHeight: wa.workHeight,
-      });
+      [x, y] = await clampOrigin(wa, wa.cursorX, wa.cursorY - getSkillsAnchorOffset(), h);
+      if (gen === resizeGeneration) placedOrigin = [x, y];
     }
 
     async function placeThroughShell() {
@@ -116,12 +121,37 @@ export function useMenuPositioning(opts: Opts) {
     logDebug(`[ctx-menu] opened at (${x}, ${y}), size ${MENU_WIDTH}x${height}`);
   }
 
+  async function resizeKeepingTop() {
+    const gen = ++resizeGeneration;
+    await tick();
+    if (gen !== resizeGeneration) return;
+    const menuEl = opts.getMenuEl();
+    const wa = opts.getWorkArea();
+    if (!menuEl || !opts.isVisible() || !wa || !placedOrigin) return;
+
+    const height = menuEl.scrollHeight + 2;
+    const [x, y] = await clampOrigin(wa, placedOrigin[0], placedOrigin[1], height);
+    if (gen !== resizeGeneration || !opts.isVisible()) return;
+    placedOrigin = [x, y];
+
+    const win = getCurrentWebviewWindow();
+    await win.setSize(new LogicalSize(MENU_WIDTH, height));
+    if (gen !== resizeGeneration || !opts.isVisible()) return;
+    if (wa.shellPlacement) {
+      await invoke("place_context_menu", { x, y, first: false });
+    } else {
+      await win.setPosition(new LogicalPosition(x, y));
+    }
+    logDebug(`[ctx-menu] resized keeping top at (${x}, ${y}), size ${MENU_WIDTH}x${height}`);
+  }
+
   return {
     get hoverEnabled() { return hoverEnabled; },
     enableHover() {
       if (!hoverEnabled) hoverEnabled = true;
     },
     triggerReposition,
+    resizeKeepingTop,
   };
 }
 
