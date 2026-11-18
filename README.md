@@ -16,11 +16,11 @@ Promptheus lives in the system tray and stays out of the way until you press a s
 
 ### Context menu over any app
 
-<img src="docs/screenshots/context-menu.png" alt="Context menu with the Chat entry, four numbered prompts, Speech to text, the last interaction and a context holding an image and a text item" width="320" align="right">
+<img src="docs/screenshots/context-menu.png" alt="Context menu with the Chat entry, four numbered prompts, Speech to text, a one-row last interaction section and a context holding an image and a text item" width="320" align="right">
 
 The global hotkey (`Ctrl+F1` on Linux, `Cmd+F1` on macOS by default) opens the context menu at the pointer, over whatever app has focus. Each prompt (skill) runs on the clipboard text and writes the result back to the clipboard; with `Shift` it opens in the chat window instead. Digits pick a prompt, so a quick action is two keystrokes.
 
-The menu also keeps a context: snippets and images collected with the "Set context" and "Append to context" shortcuts, sent along with the next prompt. "Last interaction" copies the input, output or transcription of the previous run.
+The menu also keeps a context: snippets and images collected with the "Set context" and "Append to context" shortcuts, sent along with the next prompt. "Last interaction" copies the latest input, output or transcript with one click, and its `▾` opens a filterable list of recent recordings and quick actions.
 
 Prompts are Markdown files with `{{placeholder}}` variables, edited in Settings → Prompt Base and Skills.
 
