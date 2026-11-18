@@ -282,8 +282,9 @@ export function createConversationStore(
     return { modelId: windowDefaultModelId, reasoningEffort: windowDefaultReasoningEffort, selectedTools: windowDefaultSelectedTools };
   }
 
-  let tabs = $state<TabState[]>([createTabState()]);
-  let activeTabId = $state(tabs[0].tab_id);
+  const firstTab = createTabState();
+  let tabs = $state<TabState[]>([firstTab]);
+  let activeTabId = $state(firstTab.tab_id);
   let autoCopiedNodeId = $state<string | null>(null);
   let pinRequest = $state(0);
   let scrollResetRequest = $state(0);

@@ -35,7 +35,7 @@
       <span class="collapsible-summary">{@render summary()}</span>
     {/if}
     {#if actions}
-      <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
         <span class="collapsible-actions" onclick={(e) => e.stopPropagation()}>
         {@render actions()}
       </span>

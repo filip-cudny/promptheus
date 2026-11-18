@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { slide } from "svelte/transition";
   import type { ToolCall } from "$lib/types/ai";
   import { ChevronRight, ChevronDown, Wrench } from "lucide-svelte";
@@ -14,16 +15,13 @@
     isStreaming?: boolean;
   } = $props();
 
-  let allCompletedOnMount = toolCalls.length > 0 &&
-    toolCalls.every((tc) => tc.status === "completed" || tc.status === "failed" || tc.status === "cancelled");
-
-  let expanded = $state(!allCompletedOnMount);
-  let wasActive = $state(false);
-
   let allCompleted = $derived(
     toolCalls.length > 0 &&
     toolCalls.every((tc) => tc.status === "completed" || tc.status === "failed" || tc.status === "cancelled")
   );
+
+  let expanded = $state(untrack(() => !allCompleted));
+  let wasActive = $state(false);
 
   let anyActive = $derived(
     toolCalls.some((tc) => tc.status === "in_progress" || tc.status === "pending")

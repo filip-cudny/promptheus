@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import CollapsibleSection from "$lib/components/shared/ui/CollapsibleSection.svelte";
   import ActionIconButton from "$lib/components/shared/ui/ActionIconButton.svelte";
   import Button from "$lib/components/shared/ui/Button.svelte";
@@ -30,12 +30,12 @@
   const TEXT_CHIP_TITLE_CHARS = 300;
   const TEXT_CHIP_MAX_WIDTH = "180px";
 
-  let collapsed = $state(initialCollapsed);
+  let collapsed = $state(untrack(() => initialCollapsed));
   let saving = $state(false);
   let confirming = $state<"close" | "clear" | false>(false);
 
-  let localText = $state(store.contextText);
-  let localImages = $state<ConversationImage[]>(store.contextImages);
+  let localText = $state(untrack(() => store.contextText));
+  let localImages = $state<ConversationImage[]>(untrack(() => store.contextImages));
 
   let hasContent = $derived(localText.trim().length > 0 || localImages.length > 0);
   let headerChips = $derived.by(() => {

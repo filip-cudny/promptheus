@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
   import morphdom from "morphdom";
   import { renderMarkdown, extractCodeBlocks } from "$lib/utils/markdown";
   import { icon, icons } from "$lib/utils/icons";
@@ -20,9 +20,9 @@
   const DRAIN_FRACTION = 0.15;
   const RENDER_EVERY_N_FRAMES = 2;
 
-  let displayedLength = $state(isStreaming ? 0 : content.length);
+  let displayedLength = $state(untrack(() => (isStreaming ? 0 : content.length)));
   let animFrameId: number | null = null;
-  let wasStreaming = isStreaming;
+  let wasStreaming = untrack(() => isStreaming);
   let frameCount = 0;
   let lastRenderedHtml = "";
 
@@ -258,7 +258,7 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
 <div class="markdown-renderer" bind:this={markdownContainer} onclick={handleClick}></div>
 
 <style>

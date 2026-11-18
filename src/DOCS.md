@@ -47,6 +47,9 @@ Adding a new window:
 - Smart shared composites (state + logic, but reusable across features) go in `lib/components/shared/widgets/`.
 - Feature-specific UI lives under `lib/components/features/<feature>/`. No cross-feature imports — pull into `shared/widgets/` if a component is needed by two features.
 - Keep components thin — business logic lives in stores and services.
+- `pnpm build` prints no Svelte compiler warning; keep it at zero.
+- A `<!-- svelte-ignore -->` with several codes separates them with commas (`a11y_click_events_have_key_events, a11y_no_static_element_interactions`): with spaces Svelte 5 honours only the first code.
+- A prop or state read at the top level of `<script>` to seed local state (`let value = $state(initial)`) is wrapped in `untrack(() => …)` when only the initial value is meant; when the live value is meant, read it inside a closure or `$derived` (Svelte warning `state_referenced_locally`).
 
 ### Services (IPC Layer)
 

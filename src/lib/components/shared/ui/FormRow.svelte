@@ -14,7 +14,7 @@
 </script>
 
 <div class="form-row">
-  <label class="form-label">{label}</label>
+  <span class="form-label">{label}</span>
   <div class="form-control">{@render children()}</div>
   {#if hint && !error}<p class="form-hint">{hint}</p>{/if}
   {#if error}<p class="form-error">{error}</p>{/if}

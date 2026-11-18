@@ -58,6 +58,7 @@
 
 {#if models.length > 0}
   <div class="panel-label">Quick action model</div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="models-row" onmouseenter={onHover}>
     <ModelSelector
       models={models.map((m) => toModelConfig(m, "text"))}
@@ -72,6 +73,7 @@
 {/if}
 {#if sttModels.length > 0}
   <div class="panel-label">Speech-to-text model</div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="models-row" onmouseenter={onHover}>
     <ModelSelector
       models={sttModels.map((m) => toModelConfig(m, "stt"))}

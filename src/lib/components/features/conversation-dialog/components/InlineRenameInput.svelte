@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { untrack } from "svelte";
+
   let {
     initial,
     onCommit,
@@ -9,7 +11,7 @@
     onCancel: () => void;
   } = $props();
 
-  let value = $state(initial);
+  let value = $state(untrack(() => initial));
   let cancelled = $state(false);
 
   function handleBlur() {

@@ -35,7 +35,7 @@
   const selection = useListSelection({
     count: () => items.length,
     active: () => open,
-    onEscape: onClose,
+    onEscape: () => onClose(),
     onEnter: (i) => {
       const item = items[i];
       if (item) activate(item);

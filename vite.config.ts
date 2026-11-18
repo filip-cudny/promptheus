@@ -23,6 +23,13 @@ export default defineConfig({
     minify: !process.env.TAURI_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_DEBUG,
     rollupOptions: {
+      // esbuild marks `new Set()` in the TypeScript transform with /* @__PURE__ */, and Svelte 5.55 prints that
+      // comment inside `$.get(skillFilter /* @__PURE__ */)` for `if (...) skillFilter = new Set()`; Rollup drops
+      // it harmlessly. Remove this filter once a Svelte upgrade builds without the warning.
+      onwarn(warning, warn) {
+        if (warning.code === "INVALID_ANNOTATION" && warning.id?.endsWith("/src/lib/stores/historySearch.svelte.ts")) return;
+        warn(warning);
+      },
       input: {
         "context-menu": path.resolve("./context-menu.html"),
         "conversation-dialog": path.resolve("./conversation-dialog.html"),

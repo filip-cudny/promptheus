@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from "svelte";
+  import { onMount, onDestroy, tick, untrack } from "svelte";
   import ContextSection from "./ContextSection.svelte";
   import AttachMenu from "./AttachMenu.svelte";
   import ActionIconButton from "$lib/components/shared/ui/ActionIconButton.svelte";
@@ -56,7 +56,7 @@
 
   let skillEditable: ReturnType<typeof SkillEditable> | undefined = $state();
 
-  const sync = useInputSync({ store, getSkillEditable: () => skillEditable });
+  const sync = useInputSync({ store: untrack(() => store), getSkillEditable: () => skillEditable });
   const mcp = useMcpTools();
   const dictation = useComposerDictation({ owner: "chat", insert: insertDictation });
   const attachmentBridge = useTextAttachmentBridge({
@@ -249,6 +249,7 @@
   }
 </script>
 
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div class="input-area" onclick={handleInputAreaClick}>
   {#if contextVisible}
     <ContextSection {store} {contextDisabled} initialCollapsed={contextInitialCollapsed} onHasContent={onContextAutoShow} onClose={onCloseContext} />
