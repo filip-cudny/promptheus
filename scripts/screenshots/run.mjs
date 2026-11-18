@@ -34,6 +34,7 @@ const VIEWS = {
 
 const ANIMATIONS = {
   "quick-action": { width: 800, height: 540 },
+  dictation: { width: 800, height: 560 },
 };
 
 function chromePath() {

@@ -8,6 +8,8 @@ import * as setup from "./views/setup";
 import * as recordingPill from "./views/recording-pill";
 import * as quickActionMenu from "./views/quick-action-menu";
 import * as notification from "./views/notification";
+import * as dictationPill from "./views/dictation-pill";
+import * as dictationChat from "./views/dictation-chat";
 
 export type Fixture = Record<string, unknown | ((args: Record<string, unknown>) => unknown)>;
 
@@ -28,6 +30,8 @@ const VIEWS: Record<string, View> = {
   "recording-pill": recordingPill,
   "quick-action-menu": quickActionMenu,
   notification,
+  "dictation-pill": dictationPill,
+  "dictation-chat": dictationChat,
 };
 
 const name = new URLSearchParams(location.search).get("view") ?? "";
