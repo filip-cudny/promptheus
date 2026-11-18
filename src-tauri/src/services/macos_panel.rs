@@ -2,7 +2,7 @@
 
 use std::ffi::{c_void, CStr};
 use std::sync::atomic::{AtomicI32, Ordering};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 use objc2::ffi::object_setClass;
 use objc2::rc::Retained;
@@ -13,9 +13,6 @@ use objc2_app_kit::{
     NSTrackingAreaOptions, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask, NSWorkspace,
 };
 use tauri::{AppHandle, Emitter};
-
-const POINTER_EVENT: &str = "recording-widget-pointer";
-const POINTER_TARGET: &str = "recording-widget";
 
 static PREVIOUS_APP_PID: AtomicI32 = AtomicI32::new(0);
 
@@ -245,14 +242,20 @@ pub fn top_left_y(location_y: f64, bounds_height: f64, flipped: bool) -> f64 {
 }
 
 static POINTER_APP: OnceLock<AppHandle> = OnceLock::new();
+static POINTER_OWNERS: Mutex<Vec<(usize, String, &'static str)>> = Mutex::new(Vec::new());
 
-fn emit_pointer(payload: serde_json::Value) {
-    if let Some(app) = POINTER_APP.get() {
-        let _ = app.emit_to(POINTER_TARGET, POINTER_EVENT, payload);
+fn emit_pointer(owner: &AnyObject, payload: serde_json::Value) {
+    let Some(app) = POINTER_APP.get() else {
+        return;
+    };
+    let key = owner as *const AnyObject as usize;
+    let targets = POINTER_OWNERS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((_, label, event)) = targets.iter().find(|(owner, _, _)| *owner == key) {
+        let _ = app.emit_to(label.as_str(), event, payload);
     }
 }
 
-extern "C-unwind" fn pointer_moved(_: &AnyObject, _: Sel, event: &NSEvent) {
+extern "C-unwind" fn pointer_moved(this: &AnyObject, _: Sel, event: &NSEvent) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
@@ -261,12 +264,12 @@ extern "C-unwind" fn pointer_moved(_: &AnyObject, _: Sel, event: &NSEvent) {
     };
     let point = view.convertPoint_fromView(event.locationInWindow(), None);
     let y = top_left_y(point.y, view.bounds().size.height, view.isFlipped());
-    log::trace!("recording widget pointer x={} y={y}", point.x);
-    emit_pointer(serde_json::json!({ "x": point.x, "y": y }));
+    log::trace!("window pointer x={} y={y}", point.x);
+    emit_pointer(this, serde_json::json!({ "x": point.x, "y": y }));
 }
 
-extern "C-unwind" fn pointer_exited(_: &AnyObject, _: Sel, _: &NSEvent) {
-    emit_pointer(serde_json::Value::Null);
+extern "C-unwind" fn pointer_exited(this: &AnyObject, _: Sel, _: &NSEvent) {
+    emit_pointer(this, serde_json::Value::Null);
 }
 
 fn pointer_owner_class() -> &'static AnyClass {
@@ -287,11 +290,14 @@ fn pointer_owner_class() -> &'static AnyClass {
 
 // WebKit tracks the mouse only in the key window, and the widget panel never
 // becomes key, so the page gets no hover events. A tracking area that is active
-// always reports the pointer to the page as top-left points instead.
-pub fn install_pointer_tracking(window: &tauri::WebviewWindow, app: AppHandle) -> Result<(), String> {
-    if POINTER_APP.set(app).is_err() {
-        return Err("pointer tracking is already installed".into());
-    }
+// always reports the pointer to the page as top-left points instead, emitted as
+// `event` to the window's own label.
+pub fn install_pointer_tracking(
+    window: &tauri::WebviewWindow,
+    app: AppHandle,
+    event: &'static str,
+) -> Result<(), String> {
+    let _ = POINTER_APP.set(app);
     let view = with_ns_window(window.ns_window(), |ns_window| ns_window.contentView())?
         .ok_or("content view is missing")?;
 
@@ -309,6 +315,10 @@ pub fn install_pointer_tracking(window: &tauri::WebviewWindow, app: AppHandle) -
             None,
         );
         view.addTrackingArea(&area);
+        POINTER_OWNERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push((&*owner as *const AnyObject as usize, window.label().to_string(), event));
         std::mem::forget(owner);
     }
 

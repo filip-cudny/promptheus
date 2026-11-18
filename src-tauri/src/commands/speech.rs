@@ -59,13 +59,28 @@ pub async fn set_recording_widget_dropdown(
 }
 
 #[tauri::command]
-pub async fn set_recording_widget_preview(app: AppHandle, open: bool) -> crate::Result<&'static str> {
-    session::set_recording_widget_preview(app, open).await
+pub async fn set_recording_widget_preview(
+    app: AppHandle,
+    open: bool,
+    index: Option<u32>,
+    text: Option<String>,
+) -> crate::Result<&'static str> {
+    session::set_recording_widget_preview(app, open, index, text).await
 }
 
 #[tauri::command]
-pub async fn set_recording_widget_tooltip(app: AppHandle, open: bool) -> crate::Result<&'static str> {
-    session::set_recording_widget_tooltip(app, open).await
+pub async fn set_recording_widget_tooltip(
+    app: AppHandle,
+    open: bool,
+    text: Option<String>,
+    center_x: Option<f64>,
+) -> crate::Result<&'static str> {
+    session::set_recording_widget_tooltip(app, open, text, center_x).await
+}
+
+#[tauri::command]
+pub async fn recording_widget_overlay_rendered(app: AppHandle, seq: u64) -> crate::Result<()> {
+    session::recording_widget_overlay_rendered(app, seq).await
 }
 
 #[tauri::command]

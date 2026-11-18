@@ -99,6 +99,7 @@ impl Trigger {
 #[derive(Default)]
 pub struct TriggerDetector {
     pub exclude: Rect,
+    pub overlay: Rect,
     left_down: bool,
     press: Option<(f64, f64)>,
     last_release_ms: Option<u64>,
@@ -127,7 +128,8 @@ impl TriggerDetector {
             return None;
         }
         if s.left_down {
-            self.press = (!s.owner_key && !self.exclude.contains(s.x, s.y)).then_some((s.x, s.y));
+            let on_owner = self.exclude.contains(s.x, s.y) || self.overlay.contains(s.x, s.y);
+            self.press = (!s.owner_key && !on_owner).then_some((s.x, s.y));
             return None;
         }
         let (press_x, press_y) = self.press.take()?;
@@ -226,6 +228,13 @@ mod tests {
     #[test]
     fn selection_press_inside_the_pill_with_a_50_px_drag_does_not_trigger() {
         assert_eq!(drag(&mut detector(), 0, (150.0, 120.0), (150.0, 170.0)), None);
+    }
+
+    #[test]
+    fn selection_press_inside_the_overlay_with_a_50_px_drag_does_not_trigger() {
+        let overlay = Rect { x: 100.0, y: 30.0, width: 200.0, height: 60.0 };
+        let mut d = TriggerDetector { overlay, ..detector() };
+        assert_eq!(drag(&mut d, 0, (150.0, 50.0), (150.0, 100.0)), None);
     }
 
     #[test]

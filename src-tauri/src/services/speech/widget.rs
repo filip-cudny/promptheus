@@ -21,12 +21,16 @@ use crate::services::skill::SkillService;
 use crate::services::ui_state::UiStateService;
 
 pub const WINDOW_LABEL: &str = "recording-widget";
+pub const OVERLAY_WINDOW_LABEL: &str = "recording-widget-overlay";
+pub const POINTER_EVENT: &str = "recording-widget-pointer";
+pub const OVERLAY_POINTER_EVENT: &str = "recording-widget-overlay-pointer";
 pub const WINDOW_POSITION_KEY: &str = "recording_widget.window_position";
 #[cfg(target_os = "linux")]
 pub const SHELL_POSITION_KEY: &str = "recording_widget.shell_position";
 
 const STATE_EVENT: &str = "recording-widget-state";
 const MODEL_EVENT: &str = "recording-widget-model";
+const OVERLAY_EVENT: &str = "recording-widget-overlay";
 const PREVIEW_FRAME_HEIGHT: f64 = 166.0;
 const TOOLTIP_FRAME_HEIGHT: f64 = 30.0;
 const DROPDOWN_CLOSED_EVENT: &str = "recording-widget-dropdown-closed";
@@ -198,11 +202,59 @@ pub enum OverlayKind {
     Tooltip,
 }
 
+impl OverlayKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Dropdown => "dropdown",
+            Self::Preview => "preview",
+            Self::Tooltip => "tooltip",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Overlay {
     pub kind: OverlayKind,
     pub up: bool,
     pub height: f64,
+    pub seq: u64,
+    pub shown: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum OverlayStep {
+    InPlace,
+    Reframe { hide: bool },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OverlayPlan {
+    pub seq: u64,
+    pub up: bool,
+    pub frame: ((f64, f64), (f64, f64)),
+    pub step: OverlayStep,
+    pub replaced: Option<OverlayKind>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct OverlayContent {
+    pub index: Option<u32>,
+    pub text: Option<String>,
+    pub center_x: Option<f64>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OverlayDescriptor {
+    seq: u64,
+    kind: &'static str,
+    up: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    index: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    center_x: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -248,6 +300,7 @@ struct Inner {
     scale: f64,
     grows_down: bool,
     overlay: Option<Overlay>,
+    overlay_seq: u64,
     #[cfg(target_os = "linux")]
     shell: Option<crate::services::gnome_shell::ShellProxy<'static>>,
 }
@@ -255,6 +308,48 @@ struct Inner {
 impl Inner {
     fn is_current(&self, generation: u64) -> bool {
         self.transport.is_some() && self.generation == generation
+    }
+
+    fn begin_overlay(&mut self, kind: OverlayKind, logical_height: f64) -> Result<OverlayPlan, String> {
+        let placement = match (self.transport, self.placement) {
+            (Some(Transport::Window), Some(placement)) => placement,
+            _ => return Err("recording widget window is not shown".into()),
+        };
+        let pill = physical_size(pill_size(self.item_rows), self.scale);
+        let pill = (pill.0 as f64, pill.1 as f64);
+        let up = dropdown_opens_up(placement.origin.1, pill.1, placement.work_area);
+        let height = logical_height * self.scale;
+        self.overlay_seq += 1;
+        let seq = self.overlay_seq;
+        let (origin, size) = overlay_frame(placement.origin, pill, height, up, placement.work_area);
+        let frame = ((origin.0.round(), origin.1.round()), size);
+        let current = self.overlay;
+        let in_place = current.is_some_and(|c| c.shown && c.kind == kind && c.up == up && c.height == height);
+        let step = if in_place {
+            OverlayStep::InPlace
+        } else {
+            OverlayStep::Reframe { hide: current.is_some_and(|c| c.shown) }
+        };
+        let opened = Overlay { kind, up, height, seq, shown: in_place };
+        let (overlay, replaced) = next_overlay(current, OverlayRequest::Open(opened));
+        self.overlay = overlay;
+        Ok(OverlayPlan { seq, up, frame, step, replaced })
+    }
+
+    fn finish_overlay(&mut self, seq: u64) -> bool {
+        match self.overlay.as_mut() {
+            Some(overlay) if overlay.seq == seq && !overlay.shown => {
+                overlay.shown = true;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn end_overlay(&mut self, kind: OverlayKind) -> Option<OverlayKind> {
+        let (overlay, closed) = next_overlay(self.overlay, OverlayRequest::Close(kind));
+        self.overlay = overlay;
+        closed
     }
 }
 
@@ -388,16 +483,16 @@ pub fn dropdown_height(rows: u32, separator: bool) -> f64 {
     rows as f64 * DROPDOWN_ROW_HEIGHT + 2.0 * DROPDOWN_PADDING + separator_height
 }
 
-pub fn grown_frame(
-    origin: (f64, f64),
-    size: (f64, f64),
-    list_height: f64,
+pub fn overlay_frame(
+    pill_origin: (f64, f64),
+    pill_size: (f64, f64),
+    frame_height: f64,
     up: bool,
     work_area: WorkArea,
 ) -> ((f64, f64), (f64, f64)) {
-    let grown = (size.0, size.1 + list_height);
-    let top = if up { origin.1 - list_height } else { origin.1 };
-    (clamp_origin((origin.0, top), grown, work_area), grown)
+    let size = (pill_size.0, frame_height);
+    let top = if up { pill_origin.1 - frame_height } else { pill_origin.1 + pill_size.1 };
+    (clamp_origin((pill_origin.0, top), size, work_area), size)
 }
 
 pub fn pill_targets(
@@ -716,6 +811,7 @@ impl RecordingWidget {
                 scale: 1.0,
                 grows_down: false,
                 overlay: None,
+                overlay_seq: 0,
                 #[cfg(target_os = "linux")]
                 shell: None,
             }),
@@ -759,7 +855,9 @@ impl RecordingWidget {
         inner.monochromatic = settings.monochromatic;
         inner.update_failed = false;
         inner.placement = None;
-        inner.overlay = None;
+        if inner.overlay.take().is_some() {
+            conceal_overlay(app);
+        }
         inner.transport = None;
         #[cfg(target_os = "linux")]
         {
@@ -917,9 +1015,7 @@ impl RecordingWidget {
         };
         log::debug!("recording widget: close session={}", inner.session);
         inner.generation += 1;
-        if inner.overlay.take().is_some() {
-            let _ = app.emit_to(WINDOW_LABEL, DROPDOWN_CLOSED_EVENT, ());
-        }
+        drop_overlay(app, inner);
         let result = match transport {
             #[cfg(target_os = "linux")]
             Transport::Shell => {
@@ -1035,9 +1131,7 @@ impl RecordingWidget {
     }
 
     fn resize_locked(&self, app: &AppHandle, inner: &mut Inner, item_rows: u32) {
-        if inner.overlay.take().is_some() {
-            let _ = app.emit_to(WINDOW_LABEL, DROPDOWN_CLOSED_EVENT, ());
-        }
+        drop_overlay(app, inner);
         let scale = inner.scale;
         let (width, old_height) = pill_size(inner.item_rows);
         let new_height = pill_size(item_rows).1;
@@ -1076,36 +1170,17 @@ impl RecordingWidget {
         let app = app.clone();
         tauri::async_runtime::spawn(async move {
             let widget = app.state::<RecordingWidget>();
-            let mut stored = position;
             if let Ok(monitor) = find_monitor_at(&app, position.0, position.1) {
                 let work_area = work_area_of(&monitor);
                 let mut inner = widget.inner.lock().await;
                 inner.scale = monitor.scale_factor();
-                let origin = match inner.overlay.take() {
-                    Some(overlay) => {
-                        let top = if overlay.up {
-                            position.1 as f64 + overlay.height
-                        } else {
-                            position.1 as f64
-                        };
-                        let size = physical_size(pill_size(inner.item_rows), inner.scale);
-                        let origin = clamp_origin(
-                            (position.0 as f64, top),
-                            (size.0 as f64, size.1 as f64),
-                            work_area,
-                        );
-                        let origin = (origin.0.round(), origin.1.round());
-                        log::debug!("recording widget: overlay closed by drag origin={origin:?} size={size:?}");
-                        widget.apply_frame(&app, origin, (size.0 as f64, size.1 as f64), inner.scale);
-                        let _ = app.emit_to(WINDOW_LABEL, DROPDOWN_CLOSED_EVENT, ());
-                        origin
-                    }
-                    None => (position.0 as f64, position.1 as f64),
-                };
+                if drop_overlay(&app, &mut inner) {
+                    log::debug!("recording widget: overlay closed by drag");
+                }
+                let origin = (position.0 as f64, position.1 as f64);
                 inner.placement = Some(Placement { origin, work_area });
-                stored = (origin.0 as i32, origin.1 as i32);
             }
-            widget.store_drag_debounced(&app, WINDOW_POSITION_KEY, stored).await;
+            widget.store_drag_debounced(&app, WINDOW_POSITION_KEY, position).await;
         });
     }
 
@@ -1138,15 +1213,28 @@ impl RecordingWidget {
     }
 
     pub async fn open_dropdown(&self, app: &AppHandle, rows: u32, separator: bool) -> Result<bool, String> {
-        self.open_overlay(app, OverlayKind::Dropdown, dropdown_height(rows, separator)).await
+        let height = dropdown_height(rows, separator);
+        self.open_overlay(app, OverlayKind::Dropdown, height, OverlayContent::default()).await
     }
 
-    pub async fn open_preview(&self, app: &AppHandle) -> Result<bool, String> {
-        self.open_overlay(app, OverlayKind::Preview, PREVIEW_FRAME_HEIGHT).await
+    pub async fn open_preview(
+        &self,
+        app: &AppHandle,
+        index: Option<u32>,
+        text: Option<String>,
+    ) -> Result<bool, String> {
+        let content = OverlayContent { index, text, center_x: None };
+        self.open_overlay(app, OverlayKind::Preview, PREVIEW_FRAME_HEIGHT, content).await
     }
 
-    pub async fn open_tooltip(&self, app: &AppHandle) -> Result<bool, String> {
-        self.open_overlay(app, OverlayKind::Tooltip, TOOLTIP_FRAME_HEIGHT).await
+    pub async fn open_tooltip(
+        &self,
+        app: &AppHandle,
+        text: Option<String>,
+        center_x: Option<f64>,
+    ) -> Result<bool, String> {
+        let content = OverlayContent { index: None, text, center_x };
+        self.open_overlay(app, OverlayKind::Tooltip, TOOLTIP_FRAME_HEIGHT, content).await
     }
 
     pub async fn close_dropdown(&self, app: &AppHandle) {
@@ -1166,45 +1254,58 @@ impl RecordingWidget {
         app: &AppHandle,
         kind: OverlayKind,
         logical_height: f64,
+        content: OverlayContent,
     ) -> Result<bool, String> {
         let mut inner = self.inner.lock().await;
-        let placement = match (inner.transport, inner.placement) {
-            (Some(Transport::Window), Some(placement)) => placement,
-            _ => return Err("recording widget window is not shown".into()),
+        let plan = inner.begin_overlay(kind, logical_height)?;
+        log::debug!(
+            "recording widget: {kind:?} open up={} seq={} frame={:?} step={:?}",
+            plan.up,
+            plan.seq,
+            plan.frame,
+            plan.step
+        );
+        if let OverlayStep::Reframe { hide } = plan.step {
+            if hide {
+                conceal_overlay(app);
+            }
+            apply_overlay_frame(app, plan.frame.0, plan.frame.1, inner.scale);
+        }
+        let descriptor = OverlayDescriptor {
+            seq: plan.seq,
+            kind: kind.as_str(),
+            up: plan.up,
+            index: content.index,
+            text: content.text,
+            center_x: content.center_x,
         };
-        let scale = inner.scale;
-        let size = physical_size(pill_size(inner.item_rows), scale);
-        let pill = (size.0 as f64, size.1 as f64);
-        let up = dropdown_opens_up(placement.origin.1, pill.1, placement.work_area);
-        let height = logical_height * scale;
-        let (origin, grown) = grown_frame(placement.origin, pill, height, up, placement.work_area);
-        let origin = (origin.0.round(), origin.1.round());
-        log::debug!("recording widget: {kind:?} open up={up} origin={origin:?} size={grown:?}");
-        self.apply_frame(app, origin, grown, scale);
-        let request = OverlayRequest::Open(Overlay { kind, up, height });
-        inner.overlay = next_overlay(inner.overlay, request).0;
-        Ok(up)
+        if let Err(e) = app.emit_to(OVERLAY_WINDOW_LABEL, OVERLAY_EVENT, descriptor) {
+            log::warn!("sending the overlay content failed: {e}");
+        }
+        Ok(plan.up)
+    }
+
+    pub async fn overlay_rendered(&self, app: &AppHandle, seq: u64) {
+        let mut inner = self.inner.lock().await;
+        if !inner.finish_overlay(seq) {
+            log::debug!("recording widget: stale overlay ack seq={seq}");
+            return;
+        }
+        log::debug!("recording widget: overlay ack seq={seq}");
+        if let Err(e) = reveal_overlay_window(app) {
+            log::warn!("showing the recording widget overlay failed: {e}");
+        }
     }
 
     async fn close_overlay(&self, app: &AppHandle, kind: OverlayKind) {
         let mut inner = self.inner.lock().await;
-        let (overlay, closed) = next_overlay(inner.overlay, OverlayRequest::Close(kind));
-        if closed.is_none() {
+        if inner.end_overlay(kind).is_none() {
             return;
         }
-        inner.overlay = overlay;
-        self.restore_pill_frame(app, &mut inner, kind);
-    }
-
-    fn restore_pill_frame(&self, app: &AppHandle, inner: &mut Inner, kind: OverlayKind) {
-        let scale = inner.scale;
-        let size = physical_size(pill_size(inner.item_rows), scale);
-        let size = (size.0 as f64, size.1 as f64);
-        if let Some(placement) = inner.placement.as_mut() {
-            let origin = clamp_origin(placement.origin, size, placement.work_area);
-            placement.origin = (origin.0.round(), origin.1.round());
-            log::debug!("recording widget: {kind:?} close origin={:?} size={size:?}", placement.origin);
-            self.apply_frame(app, placement.origin, size, scale);
+        log::debug!("recording widget: {kind:?} close");
+        conceal_overlay(app);
+        if kind == OverlayKind::Dropdown {
+            let _ = app.emit_to(WINDOW_LABEL, DROPDOWN_CLOSED_EVENT, ());
         }
     }
 
@@ -1214,10 +1315,7 @@ impl RecordingWidget {
         if !inner.is_current(generation) || inner.transport != Some(Transport::Window) {
             return false;
         }
-        if let Some(overlay) = inner.overlay.take() {
-            let _ = app.emit_to(WINDOW_LABEL, DROPDOWN_CLOSED_EVENT, ());
-            self.restore_pill_frame(app, &mut inner, overlay.kind);
-        }
+        drop_overlay(app, &mut inner);
         match app.get_webview_window(WINDOW_LABEL).map(|window| window.hide()) {
             Some(Ok(())) => true,
             Some(Err(e)) => {
@@ -1279,6 +1377,62 @@ fn reveal_window(app: &AppHandle) -> Result<(), String> {
         .ok_or("recording-widget window not found")?
         .show()
         .map_err(|e| e.to_string())
+}
+
+fn reveal_overlay_window(app: &AppHandle) -> Result<(), String> {
+    app.get_webview_window(OVERLAY_WINDOW_LABEL)
+        .ok_or("recording-widget-overlay window not found")?
+        .show()
+        .map_err(|e| e.to_string())
+}
+
+fn conceal_overlay_window(app: &AppHandle) -> Result<(), String> {
+    app.get_webview_window(OVERLAY_WINDOW_LABEL)
+        .ok_or("recording-widget-overlay window not found")?
+        .hide()
+        .map_err(|e| e.to_string())
+}
+
+fn conceal_overlay(app: &AppHandle) {
+    if let Err(e) = conceal_overlay_window(app) {
+        log::warn!("hiding the recording widget overlay failed: {e}");
+    }
+}
+
+fn drop_overlay(app: &AppHandle, inner: &mut Inner) -> bool {
+    if inner.overlay.take().is_none() {
+        return false;
+    }
+    conceal_overlay(app);
+    let _ = app.emit_to(WINDOW_LABEL, DROPDOWN_CLOSED_EVENT, ());
+    true
+}
+
+fn apply_overlay_frame(app: &AppHandle, origin: (f64, f64), size: (f64, f64), scale: f64) {
+    let Some(window) = app.get_webview_window(OVERLAY_WINDOW_LABEL) else {
+        log::warn!("recording widget overlay frame skipped: window not found");
+        return;
+    };
+    #[cfg(target_os = "macos")]
+    let applied = {
+        let primary_height_points = app
+            .primary_monitor()
+            .ok()
+            .flatten()
+            .map_or(0.0, |m| m.size().height as f64 / m.scale_factor());
+        crate::services::macos_panel::set_frame_physical(&window, origin, size, scale, primary_height_points)
+    };
+    #[cfg(not(target_os = "macos"))]
+    let applied = {
+        let _ = scale;
+        window
+            .set_size(PhysicalSize::new(size.0 as u32, size.1 as u32))
+            .and_then(|_| window.set_position(PhysicalPosition::new(origin.0 as i32, origin.1 as i32)))
+            .map_err(|e| e.to_string())
+    };
+    if let Err(e) = applied {
+        log::warn!("setting the recording widget overlay frame failed: {e}");
+    }
 }
 
 async fn apply_transition(
@@ -1494,6 +1648,7 @@ mod tests {
             scale: 1.0,
             grows_down: false,
             overlay: None,
+            overlay_seq: 0,
             #[cfg(target_os = "linux")]
             shell: None,
         }
@@ -1693,40 +1848,8 @@ mod tests {
         assert!(dropdown_opens_up(1800.0, 160.0, WORK_AREA));
     }
 
-    #[test]
-    fn the_dropdown_grows_upward_keeping_the_bottom_edge() {
-        assert_eq!(
-            grown_frame((200.0, 1800.0), (480.0, 160.0), 240.0, true, WORK_AREA),
-            ((200.0, 1560.0), (480.0, 400.0))
-        );
-    }
-
-    #[test]
-    fn the_dropdown_grows_downward_keeping_the_top_edge() {
-        assert_eq!(
-            grown_frame((200.0, 100.0), (480.0, 160.0), 240.0, false, WORK_AREA),
-            ((200.0, 100.0), (480.0, 400.0))
-        );
-    }
-
-    #[test]
-    fn the_preview_opens_up_from_a_pill_in_the_lower_half() {
-        assert_eq!(
-            grown_frame((100.0, 900.0), (240.0, 112.0), 166.0, true, (0.0, 0.0, 1920.0, 1040.0)),
-            ((100.0, 734.0), (240.0, 278.0))
-        );
-    }
-
-    #[test]
-    fn the_preview_opens_down_from_a_pill_in_the_upper_half() {
-        assert_eq!(
-            grown_frame((100.0, 100.0), (240.0, 112.0), 166.0, false, (0.0, 0.0, 1920.0, 1040.0)),
-            ((100.0, 100.0), (240.0, 278.0))
-        );
-    }
-
     fn overlay(kind: OverlayKind) -> Overlay {
-        Overlay { kind, up: false, height: 10.0 }
+        Overlay { kind, up: false, height: 10.0, seq: 0, shown: false }
     }
 
     #[test]
@@ -1805,6 +1928,106 @@ mod tests {
             next_overlay(current, OverlayRequest::Close(OverlayKind::Tooltip)),
             (current, None)
         );
+    }
+
+    const OVERLAY_WORK_AREA: WorkArea = (0.0, 0.0, 1440.0, 900.0);
+    const PILL: (f64, f64) = (264.0, 72.0);
+
+    #[test]
+    fn overlay_frame_puts_the_preview_above_a_pill_in_the_lower_half() {
+        assert_eq!(
+            overlay_frame((100.0, 600.0), PILL, 166.0, true, OVERLAY_WORK_AREA),
+            ((100.0, 434.0), (264.0, 166.0))
+        );
+    }
+
+    #[test]
+    fn overlay_frame_puts_the_preview_below_a_pill_in_the_upper_half() {
+        assert_eq!(
+            overlay_frame((100.0, 100.0), PILL, 166.0, false, OVERLAY_WORK_AREA),
+            ((100.0, 172.0), (264.0, 166.0))
+        );
+    }
+
+    #[test]
+    fn overlay_frame_puts_the_tooltip_above_the_pill() {
+        assert_eq!(
+            overlay_frame((100.0, 600.0), PILL, 30.0, true, OVERLAY_WORK_AREA),
+            ((100.0, 570.0), (264.0, 30.0))
+        );
+    }
+
+    #[test]
+    fn overlay_frame_puts_the_dropdown_against_the_pill_without_a_gap() {
+        let height = dropdown_height(3, true);
+        assert_eq!(
+            overlay_frame((100.0, 600.0), PILL, height, true, OVERLAY_WORK_AREA),
+            ((100.0, 499.0), (264.0, 101.0))
+        );
+        assert_eq!(
+            overlay_frame((100.0, 100.0), PILL, height, false, OVERLAY_WORK_AREA),
+            ((100.0, 172.0), (264.0, 101.0))
+        );
+    }
+
+    #[test]
+    fn overlay_frame_above_is_clamped_to_the_work_area_top() {
+        assert_eq!(
+            overlay_frame((100.0, 100.0), PILL, 166.0, true, (0.0, 25.0, 1440.0, 875.0)),
+            ((100.0, 25.0), (264.0, 166.0))
+        );
+    }
+
+    #[test]
+    fn overlay_frame_below_is_clamped_to_the_work_area_bottom() {
+        assert_eq!(
+            overlay_frame((100.0, 800.0), PILL, 166.0, false, OVERLAY_WORK_AREA),
+            ((100.0, 734.0), (264.0, 166.0))
+        );
+    }
+
+    #[test]
+    fn overlay_transitions_follow_seq_and_ack_and_leave_the_pill_placement_unchanged() {
+        let placement = Placement { origin: (100.0, 600.0), work_area: OVERLAY_WORK_AREA };
+        let mut inner = inner_with(Some(Transport::Window), 1, WidgetState::Recording);
+        inner.placement = Some(placement);
+        let frame = ((100.0, 434.0), (264.0, 166.0));
+
+        let plan = inner.begin_overlay(OverlayKind::Preview, 166.0).unwrap();
+        assert_eq!((plan.seq, plan.up, plan.frame), (1, true, frame));
+        assert_eq!(plan.step, OverlayStep::Reframe { hide: false });
+        assert!(inner.finish_overlay(1));
+        assert!(!inner.finish_overlay(1));
+        assert_eq!(inner.placement, Some(placement));
+
+        let plan = inner.begin_overlay(OverlayKind::Preview, 166.0).unwrap();
+        assert_eq!((plan.seq, plan.step), (2, OverlayStep::InPlace));
+        assert!(inner.overlay.is_some_and(|overlay| overlay.shown));
+        assert_eq!(inner.placement, Some(placement));
+
+        let plan = inner.begin_overlay(OverlayKind::Tooltip, 30.0).unwrap();
+        assert_eq!(plan.seq, 3);
+        assert_eq!(plan.step, OverlayStep::Reframe { hide: true });
+        assert_eq!(plan.replaced, Some(OverlayKind::Preview));
+        assert!(!inner.finish_overlay(2));
+        assert!(inner.finish_overlay(3));
+        assert_eq!(inner.placement, Some(placement));
+
+        assert_eq!(inner.end_overlay(OverlayKind::Preview), None);
+        assert!(inner.overlay.is_some_and(|overlay| overlay.kind == OverlayKind::Tooltip));
+        assert_eq!(inner.end_overlay(OverlayKind::Tooltip), Some(OverlayKind::Tooltip));
+        assert_eq!(inner.overlay, None);
+        assert!(!inner.finish_overlay(3));
+        assert_eq!(inner.placement, Some(placement));
+    }
+
+    #[test]
+    fn overlay_transitions_refuse_an_open_without_a_window_pill_or_placement() {
+        let mut closed = inner_with(None, 1, WidgetState::Recording);
+        closed.placement = Some(Placement { origin: (100.0, 600.0), work_area: OVERLAY_WORK_AREA });
+        assert!(closed.begin_overlay(OverlayKind::Preview, 166.0).is_err());
+        let mut unplaced = inner_with(Some(Transport::Window), 1, WidgetState::Recording);
+        assert!(unplaced.begin_overlay(OverlayKind::Preview, 166.0).is_err());
     }
 
     #[test]

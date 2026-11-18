@@ -1226,26 +1226,41 @@ pub async fn set_recording_widget_dropdown(
     Ok(if up { "up" } else { "down" })
 }
 
-pub async fn set_recording_widget_preview(app: AppHandle, open: bool) -> crate::Result<&'static str> {
-    log::debug!("recording widget intent: preview open={open}");
+pub async fn set_recording_widget_preview(
+    app: AppHandle,
+    open: bool,
+    index: Option<u32>,
+    text: Option<String>,
+) -> crate::Result<&'static str> {
+    log::debug!("recording widget intent: preview open={open} index={index:?}");
     let widget = app.state::<RecordingWidget>();
     if !open {
         widget.close_preview(&app).await;
         return Ok("down");
     }
-    let up = widget.open_preview(&app).await?;
+    let up = widget.open_preview(&app, index, text).await?;
     Ok(if up { "up" } else { "down" })
 }
 
-pub async fn set_recording_widget_tooltip(app: AppHandle, open: bool) -> crate::Result<&'static str> {
-    log::debug!("recording widget intent: tooltip open={open}");
+pub async fn set_recording_widget_tooltip(
+    app: AppHandle,
+    open: bool,
+    text: Option<String>,
+    center_x: Option<f64>,
+) -> crate::Result<&'static str> {
+    log::debug!("recording widget intent: tooltip open={open} center_x={center_x:?}");
     let widget = app.state::<RecordingWidget>();
     if !open {
         widget.close_tooltip(&app).await;
         return Ok("down");
     }
-    let up = widget.open_tooltip(&app).await?;
+    let up = widget.open_tooltip(&app, text, center_x).await?;
     Ok(if up { "up" } else { "down" })
+}
+
+pub async fn recording_widget_overlay_rendered(app: AppHandle, seq: u64) -> crate::Result<()> {
+    app.state::<RecordingWidget>().overlay_rendered(&app, seq).await;
+    Ok(())
 }
 
 pub async fn remove_recording_widget_item(

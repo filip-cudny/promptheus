@@ -1,5 +1,9 @@
 use tauri::webview::WebviewWindowBuilder;
 
+use crate::services::speech::widget::OVERLAY_WINDOW_LABEL;
+#[cfg(target_os = "macos")]
+use crate::services::speech::widget::{OVERLAY_POINTER_EVENT, POINTER_EVENT};
+
 fn overlay<'a>(
     app: &'a tauri::App,
     label: &str,
@@ -59,20 +63,30 @@ pub fn create(app: &tauri::App) -> std::result::Result<(), Box<dyn std::error::E
         .accept_first_mouse(true)
         .build()?;
 
+    let recording_widget_overlay = overlay(app, OVERLAY_WINDOW_LABEL, "", 264.0, 166.0)
+        .shadow(false)
+        .focusable(false)
+        .accept_first_mouse(true)
+        .build()?;
+
     #[cfg(target_os = "macos")]
-    {
-        if let Err(e) =
-            crate::services::macos_panel::make_nonactivating_widget_panel(&recording_widget)
-        {
-            log::warn!("failed to convert recording-widget to non-activating panel: {e}");
+    for (window, event) in [
+        (&recording_widget, POINTER_EVENT),
+        (&recording_widget_overlay, OVERLAY_POINTER_EVENT),
+    ] {
+        if let Err(e) = crate::services::macos_panel::make_nonactivating_widget_panel(window) {
+            log::warn!("failed to convert {} to non-activating panel: {e}", window.label());
         }
         if let Err(e) = crate::services::macos_panel::install_pointer_tracking(
-            &recording_widget,
+            window,
             app.handle().clone(),
+            event,
         ) {
-            log::warn!("failed to install recording-widget pointer tracking: {e}");
+            log::warn!("failed to install {} pointer tracking: {e}", window.label());
         }
     }
+    #[cfg(not(target_os = "macos"))]
+    let _ = recording_widget_overlay;
 
     let handle = app.handle().clone();
     recording_widget.on_window_event(move |event| {

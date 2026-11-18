@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for all windows",
-  "windows": ["context-menu", "context-editor", "image-preview", "text-preview-*", "history-dialog", "settings-dialog", "notification", "recording-widget", "provider-menu", "palette", "palette-backdrop"],
+  "windows": ["context-menu", "context-editor", "image-preview", "text-preview-*", "history-dialog", "settings-dialog", "notification", "recording-widget", "recording-widget-overlay", "provider-menu", "palette", "palette-backdrop"],
   "webviews": ["conversation-dialog", "shell-toolbar"],
   "permissions": [
     "core:default",

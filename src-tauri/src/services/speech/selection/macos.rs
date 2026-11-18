@@ -21,6 +21,7 @@ use crate::services::speech::claude_desktop::macos::{
     accessibility_trusted_or_prompt, on_main, restore_pasteboard, save_pasteboard,
 };
 use crate::services::speech::capture::{still_valid_now, Owner};
+use crate::services::speech::widget::OVERLAY_WINDOW_LABEL;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(POLL_INTERVAL_MS);
 const SETTLE_DELAY: Duration = Duration::from_millis(SETTLE_DELAY_MS);
@@ -154,6 +155,16 @@ fn owner_frame(app: &AppHandle, label: &str) -> Option<(Rect, bool)> {
 fn owner_frame_and_key(app: &AppHandle, owner: &Owner) -> (Rect, bool) {
     let (frame, focused) = owner_frame(app, owner.label()).unwrap_or_default();
     (frame, focused && matches!(owner, Owner::Window(_)))
+}
+
+fn pill_overlay_frame(app: &AppHandle, owner: &Owner) -> Rect {
+    let visible = app
+        .get_window(OVERLAY_WINDOW_LABEL)
+        .is_some_and(|window| window.is_visible().is_ok_and(|visible| visible));
+    if !matches!(owner, Owner::Pill { .. }) || !visible {
+        return Rect::default();
+    }
+    owner_frame(app, OVERLAY_WINDOW_LABEL).map(|(frame, _)| frame).unwrap_or_default()
 }
 
 async fn warn_permission_missing(app: &AppHandle) {
@@ -303,6 +314,7 @@ pub async fn capture(app: &AppHandle, owner: &Owner, run: u64) -> Option<String>
                 change_count_at_press = Some(on_main(app, change_count).await.ok()?);
             }
             detector.exclude = frame;
+            detector.overlay = pill_overlay_frame(app, owner);
             if let Some(trigger) = detector.feed(&sample) {
                 log::debug!("selection capture: trigger {}", trigger.name());
                 let pointer_gesture = change_count_at_press
