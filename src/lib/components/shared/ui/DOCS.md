@@ -174,7 +174,7 @@ For typing dynamic Lucide icon props, use `ComponentType<SvelteComponent<IconPro
 - One context item in form E2: kind marker first, then `#n`, text chips then the text. Image: 16 px square thumbnail (`object-fit: cover`, `--radius-md`) from `src` (a data URI) then `#n`. Text: lucide `Type` icon (12 px) then `#n` then the text on one line, ellipsized at the end; without `number` the icon then the text only.
 - Props: `kind` (`"image" | "text"`), `number`, `text`, `src`, `title`, `icon` (replaces `Type`, e.g. `Check` after a copy), `maxWidth` (text chips only), `onclick` (renders a `<button>`, stops propagation; without it a `<span>`), `onremove` with `removeLabel` (the `X` button is rendered only when `onremove` is given; it stops propagation).
 - Look as the mockup `.mini`: 20 px high, 1 px `--border-strong` border, `--radius-lg`, 11 px, weight 500, hover border `--accent-border`.
-- Used by the chat Context header (`conversation-dialog/ContextSection.svelte`). Not used by the composer and `ContextEditor` (they keep `ImageChipBar` / `AttachmentChip`); the recording pill has its own markup.
+- Used by the chat Context header (`conversation-dialog/ContextSection.svelte`) and the context menu Context section (`context-menu/ContextSection.svelte`). Not used by the composer and `ContextEditor` (they keep `ImageChipBar` / `AttachmentChip`); the recording pill has its own markup.
 
 ### ImageChipBar
 

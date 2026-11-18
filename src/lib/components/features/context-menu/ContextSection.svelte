@@ -2,8 +2,7 @@
   import type { ContextItem } from "$lib/types/context";
   import ActionIconButton from "$lib/components/shared/ui/ActionIconButton.svelte";
   import SectionHeader from "./components/SectionHeader.svelte";
-  import Chip from "$lib/components/shared/ui/Chip.svelte";
-  import ImageChipBar from "$lib/components/shared/ui/ImageChipBar.svelte";
+  import ContextItemChip from "$lib/components/shared/ui/ContextItemChip.svelte";
   import {
     FileSymlink,
     FilePlus,
@@ -11,9 +10,7 @@
     Copy,
     Trash2,
     Check,
-    X,
   } from "lucide-svelte";
-  import { ICON_SIZE } from "$lib/constants/ui";
   import { useCopyFeedback } from "$lib/utils/copyFeedback.svelte";
 
   let {
@@ -40,10 +37,12 @@
   let isEmpty = $derived(items.length === 0);
   const copyFeedback = useCopyFeedback<number>();
 
-  function truncateText(text: string, maxLength = 50): string {
-    if (text.length <= maxLength) return text;
-    return text.slice(0, maxLength) + "\u2026";
-  }
+  const imageEntries = $derived(
+    items.flatMap((item, idx) => (item.item_type === "image" ? [{ item, idx }] : [])),
+  );
+  const textEntries = $derived(
+    items.flatMap((item, idx) => (item.item_type === "text" ? [{ item, idx }] : [])),
+  );
 
   async function handleChipCopy(idx: number, content: string) {
     await navigator.clipboard.writeText(content);
@@ -91,36 +90,28 @@
 
   {#if !isEmpty}
     <div class="chips">
-      {#each items as item, idx}
-        {#if item.item_type === "text"}
-          <Chip title={item.content} onclick={() => handleChipCopy(idx, item.content)}>
-            <span class="chip-copy">
-              {#if copyFeedback.confirmed === idx}
-                <Check size={ICON_SIZE.md} />
-              {:else}
-                <Copy size={ICON_SIZE.md} />
-              {/if}
-            </span>
-            <span class="chip-number">Text #{item.number}</span>
-            <span class="chip-text">{truncateText(item.content)}</span>
-            <button
-              type="button"
-              class="chip-remove"
-              aria-label="Remove Text #{item.number}"
-              title="Remove Text #{item.number}"
-              onclick={(e) => { e.stopPropagation(); onRemoveItem(idx); }}
-            >
-              <X size={11} strokeWidth={2.5} />
-            </button>
-          </Chip>
-        {:else if item.item_type === "image"}
-          <ImageChipBar
-            images={[{ data: item.data, media_type: item.media_type, number: item.number }]}
-            variant="small"
-            onremove={() => onRemoveItem(idx)}
-            onopen={(image) => onOpenImagePreview(image.data, image.media_type)}
-          />
-        {/if}
+      {#each imageEntries as { item, idx } (idx)}
+        <ContextItemChip
+          kind="image"
+          number={item.number}
+          src={`data:${item.media_type};base64,${item.data}`}
+          title="Open image #{item.number}"
+          onclick={() => onOpenImagePreview(item.data, item.media_type)}
+          onremove={() => onRemoveItem(idx)}
+          removeLabel="Remove image #{item.number}"
+        />
+      {/each}
+      {#each textEntries as { item, idx } (idx)}
+        <ContextItemChip
+          kind="text"
+          number={item.number}
+          text={item.content}
+          icon={copyFeedback.confirmed === idx ? Check : undefined}
+          title={item.content}
+          onclick={() => handleChipCopy(idx, item.content)}
+          onremove={() => onRemoveItem(idx)}
+          removeLabel="Remove text #{item.number}"
+        />
       {/each}
     </div>
   {/if}
@@ -139,45 +130,4 @@
     padding: var(--space-2) var(--space-6) var(--space-1);
     overflow: hidden;
   }
-
-  .chips :global(.chip) {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .chip-copy {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-  }
-
-  .chip-number {
-    flex-shrink: 0;
-    font-weight: 600;
-  }
-
-  .chip-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .chip-remove {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    padding: var(--space-1);
-    border: none;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--text-disabled);
-    cursor: pointer;
-  }
-
-  .chip-remove:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: var(--text-secondary);
-  }
-
 </style>
