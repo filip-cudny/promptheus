@@ -6,6 +6,8 @@ import * as palette from "./views/palette";
 import * as history from "./views/history";
 import * as setup from "./views/setup";
 import * as recordingPill from "./views/recording-pill";
+import * as quickActionMenu from "./views/quick-action-menu";
+import * as notification from "./views/notification";
 
 export type Fixture = Record<string, unknown | ((args: Record<string, unknown>) => unknown)>;
 
@@ -24,6 +26,8 @@ const VIEWS: Record<string, View> = {
   history,
   setup,
   "recording-pill": recordingPill,
+  "quick-action-menu": quickActionMenu,
+  notification,
 };
 
 const name = new URLSearchParams(location.search).get("view") ?? "";

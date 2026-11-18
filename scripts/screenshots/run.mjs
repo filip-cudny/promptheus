@@ -1,11 +1,12 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { parseCatalog } from "./catalog.mjs";
+import { checkFfmpeg, describeWebp, renderAnimation } from "./animate.mjs";
 
 const root = join(import.meta.dirname, "..", "..");
 const outDir = join(root, "docs", "screenshots");
@@ -31,17 +32,35 @@ const VIEWS = {
   },
 };
 
+const ANIMATIONS = {
+  "quick-action": { width: 800, height: 540 },
+};
+
 function chromePath() {
   if (process.env.CHROME) return process.env.CHROME;
   if (process.platform === "darwin") return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
   return "google-chrome";
 }
 
-function selectedViews() {
-  const names = process.argv.slice(2);
-  const unknown = names.filter((name) => !(name in VIEWS));
-  if (unknown.length) throw new Error(`unknown view ${unknown.join(", ")}; known: ${Object.keys(VIEWS).join(", ")}`);
-  return names.length ? names : Object.keys(VIEWS);
+function selectedTargets() {
+  const args = process.argv.slice(2);
+  let stepsDir;
+  const stepsAt = args.indexOf("--steps");
+  if (stepsAt !== -1) {
+    const [, value] = args.splice(stepsAt, 2);
+    if (!value || value.startsWith("--")) throw new Error("--steps needs a directory");
+    stepsDir = resolve(value);
+  }
+  const unknown = args.filter((name) => !(name in VIEWS) && !(name in ANIMATIONS));
+  if (unknown.length) {
+    throw new Error(
+      `unknown name ${unknown.join(", ")}; views: ${Object.keys(VIEWS).join(", ")}; animations: ${Object.keys(ANIMATIONS).join(", ")}`,
+    );
+  }
+  const names = args.length ? args : [...Object.keys(VIEWS), ...Object.keys(ANIMATIONS)];
+  const animations = names.filter((name) => name in ANIMATIONS);
+  if (stepsDir && !animations.length) throw new Error("--steps needs an animation name");
+  return { views: names.filter((name) => name in VIEWS), animations, stepsDir };
 }
 
 function mocksPlugin(catalog) {
@@ -215,7 +234,6 @@ async function loadPage(cdp, sessionId, url) {
 
 async function captureView(cdp, sessionId, url, name) {
   const view = VIEWS[name];
-  for (const domain of ["Page", "Runtime", "Log", "Network"]) await cdp.send(`${domain}.enable`, {}, sessionId);
   const margin = view.margin ?? 0;
   await cdp.send(
     "Emulation.setDeviceMetricsOverride",
@@ -240,28 +258,57 @@ async function captureView(cdp, sessionId, url, name) {
   return data;
 }
 
-async function renderView(cdp, baseUrl, name) {
+async function withTarget(cdp, name, capture) {
   const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank" });
   const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
   try {
     const failures = watchFailures(cdp, sessionId);
-    let data;
+    let result;
     try {
-      data = await captureView(cdp, sessionId, `${baseUrl}/${VIEWS[name].page}?view=${name}`, name);
+      for (const domain of ["Page", "Runtime", "Log", "Network"]) await cdp.send(`${domain}.enable`, {}, sessionId);
+      result = await capture(sessionId);
     } catch (e) {
       failures.push(e.message.split("\n")[0]);
     }
     if (failures.length) throw new Error(`${name}: ${failures.join("; ")}`);
-    const file = join(outDir, `${name}.png`);
-    writeFileSync(file, Buffer.from(data, "base64"));
-    console.log(`${name}: wrote ${file}`);
+    return result;
   } finally {
     await cdp.send("Target.closeTarget", { targetId });
   }
 }
 
+async function renderView(cdp, baseUrl, name) {
+  const data = await withTarget(cdp, name, (sessionId) =>
+    captureView(cdp, sessionId, `${baseUrl}/${VIEWS[name].page}?view=${name}`, name),
+  );
+  const file = join(outDir, `${name}.png`);
+  writeFileSync(file, Buffer.from(data, "base64"));
+  console.log(`${name}: wrote ${file}`);
+}
+
+async function renderAnimationView(cdp, baseUrl, name, stepsDir) {
+  const webp = await withTarget(cdp, name, (sessionId) =>
+    renderAnimation({
+      cdp,
+      sessionId,
+      url: `${baseUrl}/scripts/screenshots/host.html?animation=${name}`,
+      name,
+      spec: ANIMATIONS[name],
+      stepsDir,
+      loadPage,
+      evaluate,
+    }),
+  );
+  const file = join(outDir, `${name}.webp`);
+  writeFileSync(file, webp);
+  const { frames, width, durationMs, loops } = describeWebp(webp);
+  console.log(`${name}: wrote ${file}`);
+  console.log(`${name}: ${frames} frames, ${width} px wide, ${(durationMs / 1000).toFixed(2)} s, loop count ${loops}`);
+}
+
 async function main() {
-  const names = selectedViews();
+  const { views, animations, stepsDir } = selectedTargets();
+  if (animations.length) await checkFfmpeg();
   const catalog = parseCatalog(readFileSync(join(root, "src-tauri", "src", "services", "config", "catalog.rs"), "utf8"));
   const envDir = mkdtempSync(join(tmpdir(), "screenshots-env-"));
   const profile = mkdtempSync(join(tmpdir(), "screenshots-chrome-"));
@@ -287,7 +334,9 @@ async function main() {
     chrome = launchChrome(profile);
     cdp = await connect(await readDevToolsUrl(profile, chrome));
     mkdirSync(outDir, { recursive: true });
-    for (const name of names) await renderView(cdp, `http://127.0.0.1:${port}`, name);
+    const baseUrl = `http://127.0.0.1:${port}`;
+    for (const name of views) await renderView(cdp, baseUrl, name);
+    for (const name of animations) await renderAnimationView(cdp, baseUrl, name, stepsDir);
   } finally {
     await cleanup();
   }
