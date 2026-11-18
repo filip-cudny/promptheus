@@ -53,6 +53,8 @@ export const steps: Step[] = [
     actions: [
       {
         atMs: 0,
+        // Simplification: the app clears the selected row in closeMenu() in the same tick as the digit press, so no frame can show row 2 highlighted as the digit's result; the arrow presses highlight it beforehand.
+        // Limit: the highlight appears before the digit press, not from it. Stops being correct when the menu keeps the row highlighted while it closes; then drop the arrow presses.
         run: (stage) => {
           stage.press("menu", "ArrowDown");
           stage.press("menu", "ArrowDown");
