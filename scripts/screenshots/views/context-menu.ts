@@ -23,6 +23,20 @@ function prompt(id: string, label: string, tooltip: string) {
   return item(id, label, "skill", "skills", { data: { skill_id: id, skill_name: label }, tooltip });
 }
 
+function drawContextImage(): string {
+  const canvas = document.createElement("canvas");
+  canvas.width = 200;
+  canvas.height = 120;
+  const g = canvas.getContext("2d")!;
+  g.fillStyle = "#f3f1ec";
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  g.fillStyle = "#4f7cc4";
+  [50, 80, 35, 95].forEach((height, i) => g.fillRect(20 + i * 42, 110 - height, 28, height));
+  return canvas.toDataURL("image/png").split(",")[1];
+}
+
+const contextImage = { item_type: "image", number: 1, data: drawContextImage(), media_type: "image/png" };
+
 const menuItems = [
   item("__chat__", "Chat", "chat", "chat", { separator_after: true }),
   prompt("fix-grammar", "Fix grammar", "Corrects grammar and spelling, keeping the tone."),
@@ -53,7 +67,7 @@ const menuItems = [
   item("environment_section", "Context", "context", "context", {
     separator_after: true,
     data: {
-      items: [{ item_type: "text", number: 1, content: "Release notes draft for version 2.4: faster startup, new themes." }],
+      items: [contextImage, { item_type: "text", number: 1, content: "Release notes draft for version 2.4: faster startup, new themes." }],
     },
   }),
   item("settings_section", "Settings", "settings_section", "settings"),

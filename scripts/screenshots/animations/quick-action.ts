@@ -25,7 +25,7 @@ export const backdrop = `
 </div>`;
 
 export const windows: Animation["windows"] = {
-  menu: { page: "context-menu.html", view: "quick-action-menu", left: 456, top: 130, width: 320, height: 410 },
+  menu: { page: "context-menu.html", view: "quick-action-menu", left: 456, top: 124, width: 320, height: 416 },
   toast: { page: "notification.html", view: "notification", left: 460, top: 340, width: 340, height: 140 },
 };
 

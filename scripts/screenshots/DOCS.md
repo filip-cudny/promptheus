@@ -10,7 +10,7 @@
 ## Views
 
 - `settings`: Models section with the settings agent panel widened after one invented exchange.
-- `context-menu`: the context menu with four prompts, last interaction and context, clipped to the menu.
+- `context-menu`: the context menu with four prompts, last interaction and a context holding an image and a text item, clipped to the menu.
 - `conversation`: the chat window with a two-turn conversation restored from history, the first turn an `/explain-code` skill request on a code snippet, the last answer holding a highlighted code block.
 - `palette`: the command palette after `palette:show` with two providers and three tabs, clipped to the palette.
 - `history`: the history window with results for the query `search`, typed into its search field.
@@ -22,7 +22,7 @@
 ## Animations
 
 - `quick-action`: text selected in an editor, `Ctrl+F1` opens the context menu, prompt 2 runs, a toast reports the result, `Ctrl+V` pastes it.
-- `dictation`: `Shift+F1` starts the recording pill (rendered as macOS, the only platform whose webview pill has the Screenshot button), a drawn pointer clicks Screenshot and drags a rectangle over a code error in the GNOME extension's area selector look (stage dimmed `rgba(0, 0, 0, 0.4)`, crosshair, frame of `extension.js` `_selectCaptureArea`), the pill returns with "Image #1", the pointer clicks stop + chat and the chat streams the answer.
+- `dictation`: `Shift+F1` starts the recording pill (rendered as macOS, the only platform whose webview pill has the Screenshot button), a drawn pointer clicks Screenshot and drags a rectangle over a code error in the GNOME extension's area selector look (stage dimmed `rgba(0, 0, 0, 0.4)`, crosshair, frame of `extension.js` `_selectCaptureArea`), the pill returns with the `#1` image chip (square thumbnail), the pointer clicks stop + chat and the chat streams the answer.
 
 Both fixtures name the model `GPT-6`.
 
