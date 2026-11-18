@@ -1,9 +1,13 @@
+<p align="center">
+  <img src="src-tauri/icons/logo.svg" alt="Promptheus logo" width="96">
+</p>
+
 # Promptheus
 
 A tray-resident AI prompt launcher for Linux and macOS: a global hotkey opens a context menu of your prompts over the selected text, next to a streaming LLM chat, speech-to-text dictation with a recording pill, MCP tools, ChatGPT and Claude web apps in tabs, and searchable history.
 
 <p align="center">
-  <img src="docs/screenshots/conversation.png" alt="Promptheus chat window: an /explain-code skill request on a code snippet, a follow-up and an answer with a highlighted JavaScript code block" width="700">
+  <img src="docs/screenshots/quick-action.webp" alt="Quick action: text selected in an editor, Ctrl+F1 opens the context menu, prompt 2 translates the text, a toast reports the result and Ctrl+V pastes it" width="800">
 </p>
 
 Promptheus lives in the system tray and stays out of the way until you press a shortcut. Select text in any app, press the global hotkey, pick a prompt, and the answer lands on your clipboard or in a chat window. Built with Tauri 2, Svelte 5 and Rust. Pre-1.0.
@@ -24,6 +28,10 @@ Prompts are Markdown files with `{{placeholder}}` variables, edited in Settings 
 
 ### Streaming chat
 
+<p>
+  <img src="docs/screenshots/conversation.png" alt="Promptheus chat window: an /explain-code skill request on a code snippet, a follow-up and an answer with a highlighted JavaScript code block" width="700">
+</p>
+
 The chat window streams answers from any model you configure: the OpenAI Responses or Chat Completions API, or any OpenAI-compatible endpoint (vLLM, MiniMax, local servers). Type `/skill-name` to start from a prompt, attach files and images, dictate with the microphone button, switch model and reasoning effort per message. Code blocks are highlighted and Mermaid diagrams render inline. Conversations get titles and are stored in history.
 
 ### Command palette and AI provider webviews
@@ -37,7 +45,7 @@ The chat window also hosts the web apps of AI providers, such as ChatGPT and Cla
 ### Speech-to-text dictation
 
 <p>
-  <img src="docs/screenshots/recording-pill.png" alt="Recording pill while recording: waveform, 0:14 timer, pause, cancel and send buttons, and the Dictation target" width="288">
+  <img src="docs/screenshots/dictation.webp" alt="Dictation: an image set as context, the recording pill while recording and the chat window with the answer" width="800">
 </p>
 
 `Shift+F1` starts and stops a recording anywhere. The recording pill shows the waveform and timer, pauses or cancels, and picks where the transcript goes: plain dictation copied to the clipboard, a prompt that runs on it, the chat, or the ChatGPT or Claude tab (or Claude Desktop). Transcription uses OpenAI Whisper or ElevenLabs; a failed transcription keeps the audio for a retry. On GNOME Wayland the pill is drawn by the bundled GNOME Shell extension.
