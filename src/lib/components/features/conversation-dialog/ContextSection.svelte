@@ -60,12 +60,16 @@
   });
 
   $effect(() => {
-    void [visibleChips, shownChipCount, moreChipsLabel];
     const row = chipRow;
     if (!row) return;
     const observer = new ResizeObserver(() => fitChipsInFirstLine(row));
     observer.observe(row);
     return () => observer.disconnect();
+  });
+
+  $effect(() => {
+    void visibleChips;
+    if (chipRow) fitChipsInFirstLine(chipRow);
   });
 
   function fitChipsInFirstLine(row: HTMLElement) {
@@ -220,9 +224,21 @@
 
 <style>
   .context-inline {
+    position: relative;
     flex-shrink: 0;
     background: var(--accent-bg-soft);
     border-bottom: 1px solid var(--border-strong);
+  }
+
+  .context-inline::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    width: var(--chat-top-buttons-end);
+    height: 40px;
+    transition: width var(--motion-slow) var(--ease-default);
   }
 
   .context-inline.disabled {
@@ -265,7 +281,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-3);
-    flex: 0 1 auto;
+    flex: 1;
     min-width: 0;
     height: 20px;
     overflow: hidden;
