@@ -352,11 +352,17 @@ const INTERFACE_XML = `
     </method>
     <method name="CaptureArea">
       <arg type="s" direction="in" name="path"/>
+      <arg type="s" direction="in" name="owner"/>
       <arg type="s" direction="out" name="outcome"/>
     </method>
     <method name="CaptureSelection">
+      <arg type="s" direction="in" name="owner"/>
       <arg type="s" direction="out" name="outcome"/>
       <arg type="s" direction="out" name="text"/>
+    </method>
+    <method name="CancelCapture">
+      <arg type="s" direction="in" name="owner"/>
+      <arg type="b" direction="out" name="cancelled"/>
     </method>
     <signal name="ToastActivated">
       <arg type="s" name="action"/>
@@ -390,6 +396,7 @@ export default class PromptheusExtension extends Extension {
     enable() {
         this._grabbed = new Map();
         this._pending = new Map();
+        this._selection = null;
         this._activations = new Map();
         this._overlayStops = new Set();
         this._titleWatch = null;
@@ -550,6 +557,7 @@ export default class PromptheusExtension extends Extension {
         this._ungrabAll();
         for (const pending of [...this._pending.values()])
             pending.finish(false);
+        this._selection?.finish('cancelled');
         for (const activation of [...this._activations.values()])
             activation.finish(false);
         for (const anchor of [...this._anchors.values()])
@@ -557,6 +565,7 @@ export default class PromptheusExtension extends Extension {
         this._clearToasts();
         this._removeRecordingWidget();
         this._pending = null;
+        this._selection = null;
         this._activations = null;
         this._overlayStops = null;
         this._anchors = null;
@@ -706,7 +715,7 @@ export default class PromptheusExtension extends Extension {
     }
 
     async CaptureAreaAsync(params, invocation) {
-        const [path] = params;
+        const [path, owner] = params;
         const widget = this._widget;
         if (widget) {
             this._closeDropdown(widget);
@@ -714,6 +723,10 @@ export default class PromptheusExtension extends Extension {
             this._closeTooltip(widget);
             widget.actor.hide();
         }
+        const ownerWindow = owner === '' ? null : this._findWindow(owner) ?? null;
+        const ownerFocused = !!ownerWindow && global.display.focus_window === ownerWindow;
+        ownerWindow?.get_compositor_private()?.hide();
+        console.log(`CaptureArea: owner ${owner === '' ? 'pill' : ownerWindow ? 'window' : 'window not found'}`);
         let outcome = 'cancelled';
         let failure = null;
         try {
@@ -727,6 +740,9 @@ export default class PromptheusExtension extends Extension {
         } catch (e) {
             failure = e;
         }
+        ownerWindow?.get_compositor_private()?.show();
+        if (ownerFocused)
+            Main.activateWindow(ownerWindow);
         this._widget?.actor.show();
         if (failure) {
             logError(failure, 'Promptheus: CaptureArea failed');
@@ -736,13 +752,19 @@ export default class PromptheusExtension extends Extension {
         }
     }
 
-    CaptureSelectionAsync(_params, invocation) {
+    CaptureSelectionAsync(params, invocation) {
+        const [owner] = params;
         const widget = this._widget;
-        if (!widget) {
+        const win = owner === '' ? null : this._findWindow(owner) ?? null;
+        if (owner === '' ? !widget : !win) {
+            console.log(`CaptureSelection: ${owner === '' ? 'pill not shown' : 'owner window not found'}`);
             invocation.return_value(new GLib.Variant('(ss)', ['cancelled', '']));
             return;
         }
-        widget.selection?.finish('cancelled');
+        const previous = this._selection;
+        previous?.finish('cancelled');
+        if (previous?.owner === '' && owner !== '' && this._widget)
+            this._fillRow2(this._widget);
         const primary = Meta.SelectionType.SELECTION_PRIMARY;
         const clipboard = Meta.SelectionType.SELECTION_CLIPBOARD;
         const display = global.display.get_selection();
@@ -778,7 +800,7 @@ export default class PromptheusExtension extends Extension {
             const [x, y, modifiers] = global.get_pointer();
             const down = (modifiers & Clutter.ModifierType.BUTTON1_MASK) !== 0;
             if (down && !buttonDown) {
-                gestureHeld = !pointInRect(x, y, widget.actor);
+                gestureHeld = !pointInRect(x, y, owner === '' ? widget.actor : win.get_frame_rect());
             } else if (!down && gestureHeld) {
                 gestureHeld = false;
                 gestureReleasedUs = GLib.get_monotonic_time();
@@ -798,6 +820,10 @@ export default class PromptheusExtension extends Extension {
             if ((type !== primary && type !== clipboard) || busy || !source ||
                 !source.get_mimetypes().some(mimetype => SELECTION_TEXT_MIMETYPES.includes(mimetype)))
                 return;
+            if (win && global.display.focus_window === win) {
+                console.log('CaptureSelection: owner window focused, ignored');
+                return;
+            }
             const fromClipboard = type === clipboard;
             if (fromClipboard && !inGesture()) {
                 console.log('CaptureSelection: CLIPBOARD owner changed outside a mouse gesture, ignored');
@@ -808,6 +834,8 @@ export default class PromptheusExtension extends Extension {
             awaitRelease(fromClipboard ? St.ClipboardType.CLIPBOARD : St.ClipboardType.PRIMARY);
         });
         const selection = {
+            owner,
+            win,
             finish: (outcome, text = '') => {
                 if (done)
                     return;
@@ -816,20 +844,36 @@ export default class PromptheusExtension extends Extension {
                 GLib.source_remove(gestureId);
                 if (timerId)
                     GLib.source_remove(timerId);
-                if (widget.selection === selection)
-                    widget.selection = null;
+                if (this._selection === selection)
+                    this._selection = null;
                 console.log(`CaptureSelection: outcome ${outcome} (${text.length} chars)`);
                 invocation.return_value(new GLib.Variant('(ss)', [outcome, text]));
-                if (outcome === 'captured' && this._widget === widget)
+                if (outcome === 'captured' && owner === '' && this._widget === widget)
                     this._fillRow2(widget);
             },
         };
-        widget.selection = selection;
-        this._fillRow2(widget);
+        this._selection = selection;
+        if (owner === '')
+            this._fillRow2(widget);
+    }
+
+    CancelCaptureAsync(params, invocation) {
+        const [owner] = params;
+        const cancelled = this._selection?.owner === owner;
+        if (cancelled) {
+            this._selection.finish('cancelled');
+            if (owner === '' && this._widget)
+                this._fillRow2(this._widget);
+        }
+        invocation.return_value(new GLib.Variant('(b)', [cancelled]));
+    }
+
+    _pillSelection() {
+        return this._selection?.owner === '' ? this._selection : null;
     }
 
     _cancelSelectionWaiting(widget) {
-        widget.selection.finish('cancelled');
+        this._pillSelection()?.finish('cancelled');
         this._fillRow2(widget);
     }
 
@@ -1049,7 +1093,7 @@ export default class PromptheusExtension extends Extension {
         }
         const widget = this._widget;
         widget.monochromatic = monochromatic;
-        widget.selection?.finish('cancelled');
+        this._pillSelection()?.finish('cancelled');
         widget.scales.fill(WIDGET_BAR_MIN_SCALE);
         widget.elapsed = formatElapsed(0);
         widget.model = emptyWidgetModel();
@@ -1113,7 +1157,7 @@ export default class PromptheusExtension extends Extension {
         if (!widget)
             return;
         this._widget = null;
-        widget.selection?.finish('cancelled');
+        this._pillSelection()?.finish('cancelled');
         global.compositor.enable_unredirect();
         this._endWidgetDrag(widget);
         this._closeDropdown(widget);
@@ -1181,7 +1225,6 @@ export default class PromptheusExtension extends Extension {
             lockedLabel: null,
             lockedTarget: null,
             dragId: 0,
-            selection: null,
         };
         widget.itemsRow.visible = false;
         widget.row2.style += ' spacing: 6px;';
@@ -1496,11 +1539,11 @@ export default class PromptheusExtension extends Extension {
 
     _selectTextButton(widget) {
         return this._widgetButton('Select text', this._widgetIcon('select-text'), () => {
-            if (widget.selection)
+            if (this._pillSelection())
                 this._cancelSelectionWaiting(widget);
             else
                 this._emitRecordingWidgetAction('select_text');
-        }, undefined, () => !!widget.selection);
+        }, undefined, () => !!this._pillSelection());
     }
 
     _widgetActionButton(accessibleName, iconName, action, hoverIconName = iconName, background = WIDGET_BUTTON_PLAIN) {
@@ -1520,7 +1563,7 @@ export default class PromptheusExtension extends Extension {
         const {selectedLabel, locked, stopChatDestination} = widget.model;
         const interactive = !locked && widget.state !== 'done';
         if (!interactive) {
-            widget.selection?.finish('cancelled');
+            this._pillSelection()?.finish('cancelled');
             this._closeDropdown(widget);
             if (widget.lockedLabel) {
                 widget.lockedLabel.text = selectedLabel;
@@ -1534,7 +1577,7 @@ export default class PromptheusExtension extends Extension {
             `padding: 0 ${WIDGET_PADDING_X}px 0 ${WIDGET_PADDING_X - WIDGET_TARGET_PADDING_X}px;`;
         const content = new St.BoxLayout({style: 'spacing: 4px;'});
         content.opacity = WIDGET_WAVE_OPACITY;
-        const waiting = !!widget.selection;
+        const waiting = !!this._pillSelection();
         const labelText = waiting ? 'Select text…' : selectedLabel;
         const label = new St.Label({text: labelText, y_align: Clutter.ActorAlign.CENTER});
         content.add_child(label);
