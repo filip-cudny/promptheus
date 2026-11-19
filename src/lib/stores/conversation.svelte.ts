@@ -198,6 +198,7 @@ function createTabState(
     context_images: [],
     context_own: false,
     context_hint: false,
+    context_bar_open: false,
     input_text: "",
     input_images: [],
     input_text_attachments: [],
@@ -1001,7 +1002,21 @@ export function createConversationStore(
 
   function clearActiveContext(): void {
     const tab = getTab(activeTabId);
-    if (tab) editContext(tab, { text: "", images: [] });
+    if (!tab) return;
+    editContext(tab, { text: "", images: [] });
+    tab.context_bar_open = true;
+  }
+
+  function openActiveContextBar(): void {
+    const tab = getTab(activeTabId);
+    if (tab) tab.context_bar_open = true;
+  }
+
+  function closeActiveContextBar(): void {
+    const tab = getTab(activeTabId);
+    if (!tab) return;
+    if (tab.context_text.trim() || tab.context_images.length > 0) clearActiveContext();
+    tab.context_bar_open = false;
   }
 
   function keepActiveOwnContext(): void {
@@ -1032,7 +1047,8 @@ export function createConversationStore(
     } finally {
       savingTabId = null;
     }
-    followGlobal(tab, globalContext);
+    tab.context_own = false;
+    tab.context_hint = false;
     await refreshGlobalContext();
   }
 
@@ -1208,16 +1224,6 @@ export function createConversationStore(
       ...node,
       images: node.images.filter((_, i) => i !== index),
     });
-  }
-
-  function updateContextText(text: string): void {
-    const tab = getTab(activeTabId);
-    if (tab) tab.context_text = text;
-  }
-
-  function updateContextImages(images: ConversationImage[]): void {
-    const tab = getTab(activeTabId);
-    if (tab) tab.context_images = images;
   }
 
   function updateInputText(text: string): void {
@@ -1531,6 +1537,9 @@ export function createConversationStore(
     get contextHint() {
       return activeTab.context_hint;
     },
+    get contextBarOpen() {
+      return activeTab.context_bar_open;
+    },
     get globalContext() {
       return globalContext;
     },
@@ -1596,8 +1605,6 @@ export function createConversationStore(
     addNodeImage,
     removeNodeTextAttachment,
     removeNodeImage,
-    updateContextText,
-    updateContextImages,
     updateInputText,
     insertInputText,
     updateInputImages,
@@ -1616,6 +1623,8 @@ export function createConversationStore(
     editActiveContextText,
     editActiveContextImages,
     clearActiveContext,
+    openActiveContextBar,
+    closeActiveContextBar,
     keepActiveOwnContext,
     useGlobalContextInActiveTab,
     saveActiveContextAsGlobal,

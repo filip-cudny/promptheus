@@ -49,6 +49,7 @@ export interface TabState {
   context_images: ConversationImage[];
   context_own: boolean;
   context_hint: boolean;
+  context_bar_open: boolean;
   input_text: string;
   input_images: ConversationImage[];
   input_text_attachments: string[];

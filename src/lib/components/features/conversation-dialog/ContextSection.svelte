@@ -1,28 +1,26 @@
 <script lang="ts">
-  import { onMount, untrack } from "svelte";
+  import { untrack } from "svelte";
   import CollapsibleSection from "$lib/components/shared/ui/CollapsibleSection.svelte";
   import ActionIconButton from "$lib/components/shared/ui/ActionIconButton.svelte";
   import Button from "$lib/components/shared/ui/Button.svelte";
   import ContextItemChip from "$lib/components/shared/ui/ContextItemChip.svelte";
+  import FloatingPanel from "$lib/components/shared/ui/FloatingPanel.svelte";
   import ContextEditor from "$lib/components/shared/widgets/ContextEditor.svelte";
-  import { appendContext, appendContextImage, clearContext } from "$lib/services/context";
   import { openImagePreview } from "$lib/services/windowPreviews";
   import { parseContextTextItems } from "$lib/utils/contextBlocks";
   import { Save, Check, X, Trash2 } from "lucide-svelte";
-  import { getGlobalContext, unwrapContextBlocks, type createConversationStore } from "$lib/stores/conversation.svelte";
-  import type { ConversationImage } from "$lib/types/conversation";
+  import type { createConversationStore } from "$lib/stores/conversation.svelte";
+  import type { ContextValue } from "$lib/utils/contextFollow";
 
   let {
     store,
     contextDisabled = false,
     initialCollapsed = false,
-    onHasContent,
     onClose,
   }: {
     store: ReturnType<typeof createConversationStore>;
     contextDisabled?: boolean;
     initialCollapsed?: boolean;
-    onHasContent?: () => void;
     onClose?: () => void;
   } = $props();
 
@@ -34,29 +32,24 @@
   let saving = $state(false);
   let confirming = $state<"close" | "clear" | false>(false);
 
-  let localText = $state(untrack(() => store.contextText));
-  let localImages = $state<ConversationImage[]>(untrack(() => store.contextImages));
+  let hintBadge: HTMLElement | undefined = $state();
+  let hintOpen = $state(false);
 
-  let hasContent = $derived(localText.trim().length > 0 || localImages.length > 0);
-  let headerChips = $derived.by(() => {
-    const images = localImages.map((image, idx) => ({ kind: "image" as const, number: image.number ?? idx + 1, image }));
-    const texts = parseContextTextItems(localText).map((item) => ({ kind: "text" as const, ...item }));
+  function chipsOf(context: ContextValue) {
+    const images = context.images.map((image, idx) => ({ kind: "image" as const, number: image.number ?? idx + 1, image }));
+    const texts = parseContextTextItems(context.text).map((item) => ({ kind: "text" as const, ...item }));
     return [...images, ...texts];
-  });
+  }
+
+  let hasContent = $derived(store.contextText.trim().length > 0 || store.contextImages.length > 0);
+  let headerChips = $derived(chipsOf({ text: store.contextText, images: store.contextImages }));
+  let globalChips = $derived(chipsOf(store.globalContext));
   let visibleChips = $derived(headerChips.slice(0, MAX_HEADER_CHIPS));
   let chipRow: HTMLElement | null = $state(null);
   let moreChipsLabel: HTMLElement | null = $state(null);
   let fittingChipCount = $state(MAX_HEADER_CHIPS);
   let shownChipCount = $derived(Math.min(fittingChipCount, visibleChips.length));
   let hiddenChipCount = $derived(headerChips.length - shownChipCount);
-
-  $effect(() => {
-    store.updateContextText(localText);
-  });
-
-  $effect(() => {
-    store.updateContextImages(localImages);
-  });
 
   $effect(() => {
     const row = chipRow;
@@ -83,32 +76,23 @@
     }
   }
 
-  onMount(async () => {
-    try {
-      ({ text: localText, images: localImages } = await getGlobalContext());
-      if (localText.trim().length > 0 || localImages.length > 0) {
-        onHasContent?.();
-      }
-    } catch {
-      // non-fatal
-    }
-  });
-
   async function saveContext() {
     saving = true;
     try {
-      await clearContext();
-      for (const img of localImages) {
-        await appendContextImage(img.data, img.media_type);
-      }
-      const savedText = unwrapContextBlocks(localText);
-      if (savedText.trim()) {
-        await appendContext(savedText);
-      }
-      ({ text: localText, images: localImages } = await getGlobalContext());
+      await store.saveActiveContextAsGlobal();
     } finally {
       saving = false;
     }
+  }
+
+  function keepOwn() {
+    hintOpen = false;
+    store.keepActiveOwnContext();
+  }
+
+  function useGlobal() {
+    hintOpen = false;
+    store.useGlobalContextInActiveTab();
   }
 
   function requestClose() {
@@ -124,16 +108,10 @@
   }
 
   function confirmAction() {
-    if (confirming === "close") {
-      localText = "";
-      localImages = [];
-      confirming = false;
-      onClose?.();
-    } else if (confirming === "clear") {
-      localText = "";
-      localImages = [];
-      confirming = false;
-    }
+    const action = confirming;
+    confirming = false;
+    if (action === "close") onClose?.();
+    else if (action === "clear") store.clearActiveContext();
   }
 
   function cancelConfirm() {
@@ -141,7 +119,7 @@
   }
 </script>
 
-<div class="context-inline" class:disabled={contextDisabled} class:has-content={hasContent}>
+<div class="context-inline" class:disabled={contextDisabled} class:hinted={store.contextHint}>
   {#if confirming}
     <div class="confirm-bar">
       <span class="confirm-text">
@@ -188,6 +166,19 @@
             {/if}
           </span>
         {/if}
+        {#if store.contextHint}
+          <button
+            type="button"
+            class="hint-badge"
+            bind:this={hintBadge}
+            onclick={(e) => {
+              e.stopPropagation();
+              hintOpen = !hintOpen;
+            }}
+          >
+            <span class="hint-dot"></span>Global changed
+          </button>
+        {/if}
       {/snippet}
       {#snippet actions()}
         <ActionIconButton
@@ -211,14 +202,46 @@
         />
       {/snippet}
       <ContextEditor
-        bind:text={localText}
-        bind:images={localImages}
+        bind:text={() => store.contextText, (v) => store.editActiveContextText(v)}
+        bind:images={() => store.contextImages, (v) => store.editActiveContextImages(v)}
         disabled={contextDisabled}
         placeholder={contextDisabled ? "This prompt doesn't use {{context}}" : "Enter context text\u2026"}
       />
     </CollapsibleSection>
   {/if}
 </div>
+
+<FloatingPanel visible={hintOpen && store.contextHint} anchorEl={hintBadge} align="end" fitContent flush={false} onclose={() => (hintOpen = false)}>
+  <div class="hint-panel">
+    <p class="hint-text">The global context changed. This conversation uses its own version.</p>
+    <div class="hint-caption">Global context</div>
+    <div class="hint-chips">
+      {#each globalChips as chip}
+        {#if chip.kind === "image"}
+          <ContextItemChip
+            kind="image"
+            number={chip.number}
+            src={`data:${chip.image.media_type};base64,${chip.image.data}`}
+            title="Open image #{chip.number}"
+            onclick={() => openImagePreview(chip.image.data, chip.image.media_type)}
+          />
+        {:else}
+          <ContextItemChip
+            kind="text"
+            number={chip.number}
+            text={chip.text}
+            maxWidth={TEXT_CHIP_MAX_WIDTH}
+            title={chip.text.slice(0, TEXT_CHIP_TITLE_CHARS)}
+          />
+        {/if}
+      {/each}
+    </div>
+    <div class="hint-actions">
+      <Button variant="ghost" onclick={keepOwn}>Keep this</Button>
+      <Button variant="primary" onclick={useGlobal}>Use global</Button>
+    </div>
+  </div>
+</FloatingPanel>
 
 <style>
   .context-inline {
@@ -227,8 +250,8 @@
     border-bottom: 1px solid var(--border-strong);
   }
 
-  .context-inline.has-content {
-    box-shadow: inset 2px 0 0 var(--accent);
+  .context-inline.hinted {
+    box-shadow: inset 2px 0 0 var(--warning);
   }
 
   .context-inline::before {
@@ -313,6 +336,61 @@
     font-weight: var(--font-weight-medium);
     color: var(--text-muted);
     white-space: nowrap;
+  }
+
+  .hint-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: none;
+    height: 22px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 11px;
+    background: var(--warning-bg-soft);
+    color: var(--warning);
+    font: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .hint-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--warning);
+  }
+
+  .hint-panel {
+    width: 330px;
+    max-width: 100%;
+  }
+
+  .hint-text {
+    margin: 0 0 var(--space-4);
+    font-size: var(--font-size-md);
+    color: var(--text-secondary);
+  }
+
+  .hint-caption {
+    margin-bottom: var(--space-3);
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+  }
+
+  .hint-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+  }
+
+  .hint-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
   }
 
   .confirm-bar {

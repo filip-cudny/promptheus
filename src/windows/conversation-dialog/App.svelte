@@ -5,7 +5,6 @@
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { createConversationStore } from "$lib/stores/conversation.svelte";
-  import { hasContext } from "$lib/services/context";
   import { getSettings } from "$lib/services/settings";
   import { getContextWindowSize } from "$lib/utils/contextWindow";
   import { getSkillsStore } from "$lib/stores/skills.svelte";
@@ -52,9 +51,11 @@
   });
 
   let sidebarOpen = $state(false);
-  let contextVisible = $state(false);
+  let contextVisible = $derived(
+    store.contextText.trim().length > 0 || store.contextImages.length > 0 || store.contextBarOpen,
+  );
   let contextDisabled = $state(false);
-  let contextInitialCollapsed = $state(false);
+  let contextInitialCollapsed = $derived(!store.contextBarOpen);
   let models = $state<ModelConfig[]>([]);
   let defaultModelId = $state<string | null>(null);
 
@@ -160,14 +161,6 @@
     }
   }
 
-  async function autoShowContextIfNeeded() {
-    if (contextDisabled || contextVisible) return;
-    if (await hasContext()) {
-      contextInitialCollapsed = true;
-      contextVisible = true;
-    }
-  }
-
   async function handleVoiceInput(
     skillId: string,
     text: string,
@@ -196,9 +189,7 @@
         console.error("load global context failed", err);
       }
     }
-    const sending = store.sendMessage();
-    await autoShowContextIfNeeded();
-    const outcome = await sending;
+    const outcome = await store.sendMessage();
     if (!copyToken || !outcome.success || !outcome.tabId || !outcome.nodeId) return;
     const tab = store.tabs.find((t) => t.tab_id === outcome.tabId);
     const node = tab?.tree.nodes.get(outcome.nodeId);
@@ -258,7 +249,6 @@
     },
     onContextChanged: (version) => {
       store.handleGlobalContextChanged(version);
-      autoShowContextIfNeeded();
     },
   });
 
@@ -295,7 +285,6 @@
     }
 
     await ipc.init();
-    await autoShowContextIfNeeded();
     try {
       const snapshot = await getTabs();
       const active = snapshot.tabs.find((t) => t.id === snapshot.active_id);
@@ -306,22 +295,13 @@
     reportingReady = true;
   });
 
-  function handleContextAutoShow() {
-    if (!contextDisabled) {
-      contextInitialCollapsed = !contextVisible;
-      contextVisible = true;
-    }
-  }
-
   function toggleContext() {
     if (contextVisible) closeContext();
-    else contextVisible = true;
+    else store.openActiveContextBar();
   }
 
   function closeContext() {
-    contextVisible = false;
-    store.updateContextText("");
-    store.updateContextImages([]);
+    store.closeActiveContextBar();
   }
 
   async function handleSendAndCopy() {
@@ -358,7 +338,6 @@
       {store}
       {contextDisabled}
       initialCollapsed={contextInitialCollapsed}
-      onHasContent={handleContextAutoShow}
       onClose={closeContext}
     />
   {/if}
