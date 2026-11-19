@@ -8,3 +8,4 @@
 - `fonts.css` — `@font-face` rules for `"Inter"` and `"JetBrains Mono"`, `font-display: block`, `unicode-range` and weight ranges as in the Fontsource CSS.
 - Font files: `src/assets/fonts/<family>/`, Fontsource variable `wght` `woff2` (`@fontsource-variable/inter` and `@fontsource-variable/jetbrains-mono`, both 5.3.0), latin and latin-ext, upright and italic, with `OFL.txt` (SIL Open Font License 1.1) from the package. To update, unpack the new npm tarballs and copy the same files; compare `unicode-range` and weights with the package's `wght.css` and `wght-italic.css`.
 - `src/` sets `font-family` only through `var(--font-sans)`, `var(--font-mono)` or `inherit` (the `@font-face` rules in `fonts.css` excepted).
+- A third-party component that sets its own `font-family` is overridden with `var(--font-sans)` in the component that wraps it (`NotificationStack.svelte` for `svelte-sonner`).

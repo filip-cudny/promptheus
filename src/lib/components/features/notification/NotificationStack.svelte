@@ -43,6 +43,7 @@
     inset: 0 !important;
     width: auto !important;
     height: auto !important;
+    font-family: var(--font-sans) !important;
   }
 
   :global([data-sonner-toast]) {
