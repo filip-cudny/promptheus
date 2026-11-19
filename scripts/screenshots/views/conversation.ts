@@ -124,6 +124,8 @@ export const fixture: Fixture = {
   list_mcp_tools: [],
   get_dictation_busy: null,
   has_context: false,
+  get_context_items: [],
+  get_labelled_context: null,
   get_tabs: { tabs: [], active_id: null },
   report_native_tabs: null,
   "plugin:window|is_maximized": false,

@@ -2,6 +2,7 @@
 
 `pnpm screenshots [name…]` renders windows of the app from invented fixtures in headless Chrome into `docs/screenshots/<view>.png` and `docs/screenshots/<animation>.webp`; no name renders all views and animations. Needs Node ≥ 22 (built-in `WebSocket`), Google Chrome and, for animations, `ffmpeg`.
 
+- The media in `docs/screenshots/` are rendered on Linux with the bundled fonts (`src/assets/fonts/`, Inter and JetBrains Mono), so they match the Linux app. A view without `platform` gets `data-platform="linux"` from `platformAttribute.ts` and so the Linux rules of the app (solid input bar and sidebar, command palette).
 - Chrome path: `CHROME`, else `google-chrome` on Linux and `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` on macOS.
 - `run.mjs` starts Vite without the project's `vite.config.ts`, with an empty `envDir` and every `VITE_*` variable removed, injects `mocks.ts` before each window's entry script and drives Chrome over the DevTools protocol with a fresh temporary profile.
 - `mocks.ts` installs `mockWindows` and `mockIPC` (events mocked) and answers each `invoke` from the view's fixture in `views/<view>.ts`.
