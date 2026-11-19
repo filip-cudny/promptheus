@@ -142,7 +142,7 @@ Uses `tauri-plugin-log` (`setup/log.rs`) with the standard Rust `log` crate. Log
 
 - Rust: use `log::{info, warn, error, debug}` macros directly.
 - Frontend: `import { error, info, warn } from "@tauri-apps/plugin-log"`.
-- `attachConsole()` bridges Rust logs into browser devtools; it is called in `src/windows/{context-menu,conversation-dialog}/entry.ts` and in the `App.svelte` of `notification` and `recording-widget`.
+- `attachConsole()` bridges Rust logs into browser devtools; it is called in `src/windows/{context-menu,conversation-dialog}/entry.ts` and in the `App.svelte` of `notification`, `recording-widget` and `recording-widget-overlay`.
 - Default level is `Info` globally, `Debug` for the app crate. Override with `RUST_LOG` env var.
 - Log at decision points and errors, not at every function boundary.
 

@@ -54,7 +54,7 @@ Adding a new window:
 ### Services (IPC Layer)
 
 - `lib/services/` has one file per domain (`settings.ts`, `history.ts`, `skills.ts`, …) wrapping `invoke()` with typed signatures.
-- Components call services, not `invoke()`; this keeps the IPC boundary explicit. Preference, not enforced: direct calls exist in `windows/provider-menu/App.svelte`, `windows/recording-widget/App.svelte` and `windows/conversation-dialog/App.svelte` (`get_dialog_init_params`).
+- Components call services, not `invoke()`; this keeps the IPC boundary explicit. Preference, not enforced: direct calls exist in `windows/provider-menu/App.svelte`, `windows/recording-widget/App.svelte`, `windows/recording-widget-overlay/App.svelte` and `windows/conversation-dialog/App.svelte` (`get_dialog_init_params`).
 
 ### Types
 
