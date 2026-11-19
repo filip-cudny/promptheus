@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -356,6 +356,7 @@ impl Inner {
 pub struct RecordingWidget {
     inner: Mutex<Inner>,
     move_seq: AtomicU64,
+    overlay_visible: AtomicBool,
     programmatic_origin: std::sync::Mutex<Option<(i32, i32)>>,
     thumbnails: super::pill_previews::ThumbnailCache,
 }
@@ -816,6 +817,7 @@ impl RecordingWidget {
                 shell: None,
             }),
             move_seq: AtomicU64::new(0),
+            overlay_visible: AtomicBool::new(false),
             programmatic_origin: std::sync::Mutex::new(None),
             thumbnails: super::pill_previews::ThumbnailCache::default(),
         }
@@ -823,6 +825,10 @@ impl RecordingWidget {
 
     pub async fn is_shown(&self) -> bool {
         self.inner.lock().await.transport.is_some()
+    }
+
+    pub fn overlay_visible(&self) -> bool {
+        self.overlay_visible.load(Ordering::Relaxed)
     }
 
     pub async fn show(&self, app: &AppHandle, session: u64) -> bool {
@@ -1016,6 +1022,7 @@ impl RecordingWidget {
         log::debug!("recording widget: close session={}", inner.session);
         inner.generation += 1;
         drop_overlay(app, inner);
+        order_out_overlay(app);
         let result = match transport {
             #[cfg(target_os = "linux")]
             Transport::Shell => {
@@ -1266,7 +1273,7 @@ impl RecordingWidget {
             plan.step
         );
         if let OverlayStep::Reframe { hide } = plan.step {
-            if hide {
+            if hide && !cfg!(target_os = "macos") {
                 conceal_overlay(app);
             }
             apply_overlay_frame(app, plan.frame.0, plan.frame.1, inner.scale);
@@ -1292,8 +1299,12 @@ impl RecordingWidget {
             return;
         }
         log::debug!("recording widget: overlay ack seq={seq}");
-        if let Err(e) = reveal_overlay_window(app) {
-            log::warn!("showing the recording widget overlay failed: {e}");
+        match reveal_overlay_window(app) {
+            Ok(()) => {
+                self.overlay_visible.store(true, Ordering::Relaxed);
+                log::debug!("recording widget: overlay reveal seq={seq}");
+            }
+            Err(e) => log::warn!("showing the recording widget overlay failed: {e}"),
         }
     }
 
@@ -1316,6 +1327,7 @@ impl RecordingWidget {
             return false;
         }
         drop_overlay(app, &mut inner);
+        order_out_overlay(app);
         match app.get_webview_window(WINDOW_LABEL).map(|window| window.hide()) {
             Some(Ok(())) => true,
             Some(Err(e)) => {
@@ -1379,25 +1391,53 @@ fn reveal_window(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-fn reveal_overlay_window(app: &AppHandle) -> Result<(), String> {
+fn overlay_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
     app.get_webview_window(OVERLAY_WINDOW_LABEL)
-        .ok_or("recording-widget-overlay window not found")?
-        .show()
-        .map_err(|e| e.to_string())
+        .ok_or_else(|| "recording-widget-overlay window not found".to_string())
 }
 
+fn set_overlay_visible(app: &AppHandle, visible: bool) {
+    app.state::<RecordingWidget>().overlay_visible.store(visible, Ordering::Relaxed);
+}
+
+#[cfg(target_os = "macos")]
+fn reveal_overlay_window(app: &AppHandle) -> Result<(), String> {
+    crate::services::macos_panel::reveal_overlay_panel(&overlay_window(app)?)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn reveal_overlay_window(app: &AppHandle) -> Result<(), String> {
+    overlay_window(app)?.show().map_err(|e| e.to_string())
+}
+
+#[cfg(target_os = "macos")]
 fn conceal_overlay_window(app: &AppHandle) -> Result<(), String> {
-    app.get_webview_window(OVERLAY_WINDOW_LABEL)
-        .ok_or("recording-widget-overlay window not found")?
-        .hide()
-        .map_err(|e| e.to_string())
+    crate::services::macos_panel::conceal_overlay_panel(&overlay_window(app)?)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn conceal_overlay_window(app: &AppHandle) -> Result<(), String> {
+    overlay_window(app)?.hide().map_err(|e| e.to_string())
 }
 
 fn conceal_overlay(app: &AppHandle) {
+    set_overlay_visible(app, false);
+    log::debug!("recording widget: overlay conceal");
     if let Err(e) = conceal_overlay_window(app) {
         log::warn!("hiding the recording widget overlay failed: {e}");
     }
 }
+
+#[cfg(target_os = "macos")]
+fn order_out_overlay(app: &AppHandle) {
+    conceal_overlay(app);
+    if let Err(e) = overlay_window(app).and_then(|window| window.hide().map_err(|e| e.to_string())) {
+        log::warn!("ordering out the recording widget overlay failed: {e}");
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn order_out_overlay(_app: &AppHandle) {}
 
 fn drop_overlay(app: &AppHandle, inner: &mut Inner) -> bool {
     if inner.overlay.take().is_none() {
@@ -1420,7 +1460,8 @@ fn apply_overlay_frame(app: &AppHandle, origin: (f64, f64), size: (f64, f64), sc
             .ok()
             .flatten()
             .map_or(0.0, |m| m.size().height as f64 / m.scale_factor());
-        crate::services::macos_panel::set_frame_physical(&window, origin, size, scale, primary_height_points)
+        set_overlay_visible(app, false);
+        crate::services::macos_panel::prepare_overlay_frame(&window, origin, size, scale, primary_height_points)
     };
     #[cfg(not(target_os = "macos"))]
     let applied = {

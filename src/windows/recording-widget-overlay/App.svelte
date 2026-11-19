@@ -105,6 +105,12 @@
     }
   }
 
+  function paintedFrame(): Promise<void> {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+  }
+
   async function acknowledge(seq: number) {
     try {
       await invoke("recording_widget_overlay_rendered", { seq });
@@ -126,6 +132,7 @@
     await tick();
     if (descriptor !== next) return;
     if (next.kind === "preview" && previewContent?.kind === "image" && !(await decodeImage())) return;
+    await paintedFrame();
     if (descriptor === next) await acknowledge(next.seq);
   }
 

@@ -217,20 +217,79 @@ pub fn set_frame_physical(
     let target = window.clone();
     window
         .run_on_main_thread(move || {
-            let height = size.1 / scale;
             let moved = with_ns_window(target.ns_window(), |ns_window| {
-                let mut frame = ns_window.frame();
-                frame.origin.x = origin.0 / scale;
-                frame.origin.y = primary_height_points - origin.1 / scale - height;
-                frame.size.width = size.0 / scale;
-                frame.size.height = height;
-                ns_window.setFrame_display(frame, true);
+                set_frame_in_points(ns_window, origin, size, scale, primary_height_points);
             });
             if let Err(e) = moved {
                 log::warn!("setFrame skipped: {e}");
             }
         })
         .map_err(|e| e.to_string())
+}
+
+fn set_frame_in_points(
+    ns_window: &NSWindow,
+    origin: (f64, f64),
+    size: (f64, f64),
+    scale: f64,
+    primary_height_points: f64,
+) {
+    let height = size.1 / scale;
+    let mut frame = ns_window.frame();
+    frame.origin.x = origin.0 / scale;
+    frame.origin.y = primary_height_points - origin.1 / scale - height;
+    frame.size.width = size.0 / scale;
+    frame.size.height = height;
+    ns_window.setFrame_display(frame, true);
+}
+
+fn run_overlay_closure(
+    window: &tauri::WebviewWindow,
+    what: &'static str,
+    f: impl FnOnce(&NSWindow) + Send + 'static,
+) -> Result<(), String> {
+    let target = window.clone();
+    window
+        .run_on_main_thread(move || {
+            if let Err(e) = with_ns_window(target.ns_window(), f) {
+                log::warn!("{what} skipped: {e}");
+            }
+        })
+        .map_err(|e| e.to_string())
+}
+
+// Sets the frame at alpha 0 and click-through in the same main-thread closure,
+// then orders the window in when it is not, so its content and frame change
+// without a frame on screen.
+pub fn prepare_overlay_frame(
+    window: &tauri::WebviewWindow,
+    origin: (f64, f64),
+    size: (f64, f64),
+    scale: f64,
+    primary_height_points: f64,
+) -> Result<(), String> {
+    run_overlay_closure(window, "prepare overlay frame", move |ns_window| {
+        ns_window.setAlphaValue(0.0);
+        ns_window.setIgnoresMouseEvents(true);
+        set_frame_in_points(ns_window, origin, size, scale, primary_height_points);
+        if !ns_window.isVisible() {
+            ns_window.orderFrontRegardless();
+        }
+    })
+}
+
+pub fn reveal_overlay_panel(window: &tauri::WebviewWindow) -> Result<(), String> {
+    run_overlay_closure(window, "reveal overlay panel", |ns_window| {
+        ns_window.setIgnoresMouseEvents(false);
+        ns_window.setAlphaValue(1.0);
+    })
+}
+
+pub fn conceal_overlay_panel(window: &tauri::WebviewWindow) -> Result<(), String> {
+    run_overlay_closure(window, "conceal overlay panel", |ns_window| {
+        ns_window.setAlphaValue(0.0);
+        ns_window.setIgnoresMouseEvents(true);
+    })
 }
 
 pub fn top_left_y(location_y: f64, bounds_height: f64, flipped: bool) -> f64 {

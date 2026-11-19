@@ -21,7 +21,7 @@ use crate::services::speech::claude_desktop::macos::{
     accessibility_trusted_or_prompt, on_main, restore_pasteboard, save_pasteboard,
 };
 use crate::services::speech::capture::{still_valid_now, Owner};
-use crate::services::speech::widget::OVERLAY_WINDOW_LABEL;
+use crate::services::speech::widget::{RecordingWidget, OVERLAY_WINDOW_LABEL};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(POLL_INTERVAL_MS);
 const SETTLE_DELAY: Duration = Duration::from_millis(SETTLE_DELAY_MS);
@@ -158,9 +158,7 @@ fn owner_frame_and_key(app: &AppHandle, owner: &Owner) -> (Rect, bool) {
 }
 
 fn pill_overlay_frame(app: &AppHandle, owner: &Owner) -> Rect {
-    let visible = app
-        .get_window(OVERLAY_WINDOW_LABEL)
-        .is_some_and(|window| window.is_visible().is_ok_and(|visible| visible));
+    let visible = app.state::<RecordingWidget>().overlay_visible();
     if !matches!(owner, Owner::Pill { .. }) || !visible {
         return Rect::default();
     }
