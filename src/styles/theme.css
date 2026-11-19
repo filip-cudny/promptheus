@@ -26,14 +26,14 @@
   --text-faint: rgba(255, 255, 255, 0.25);
 
   /* 4.4 accent */
-  --accent: #6FA0E5;
-  --accent-vivid: #5093EE;
+  --accent: #4C8DFF;
+  --accent-vivid: #3A7BF5;
   --accent-fg: #ffffff;
-  --accent-bg-soft: rgba(111, 160, 229, 0.18);
-  --accent-bg: rgba(111, 160, 229, 0.35);
-  --accent-border: rgba(111, 160, 229, 0.50);
-  --accent-ring: rgba(111, 160, 229, 0.60);
-  --user-bubble-bg: rgba(111, 160, 229, 0.07);
+  --accent-bg-soft: rgba(76, 141, 255, 0.18);
+  --accent-bg: rgba(76, 141, 255, 0.35);
+  --accent-border: rgba(76, 141, 255, 0.50);
+  --accent-ring: rgba(76, 141, 255, 0.60);
+  --user-bubble-bg: rgba(76, 141, 255, 0.07);
 
   accent-color: var(--accent);
 
