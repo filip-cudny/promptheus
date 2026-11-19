@@ -23,9 +23,6 @@ fn overlay<'a>(
 }
 
 pub fn create(app: &tauri::App) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let no_scroll = std::env::var("PROMPTHEUS_CTX_DIAG_NO_SCROLL").is_ok_and(|v| v == "1");
-    let delay_resize = std::env::var("PROMPTHEUS_CTX_DIAG_DELAY_RESIZE").is_ok_and(|v| v == "1");
-    log::info!("[ctx-menu-diag] switches noScroll={no_scroll} delayResize={delay_resize}");
     let context_menu_window = overlay(
         app,
         "context-menu",
@@ -33,7 +30,6 @@ pub fn create(app: &tauri::App) -> std::result::Result<(), Box<dyn std::error::E
         320.0,
         400.0,
     )
-    .initialization_script(format!("window.__ctxMenuDiag = {{ noScroll: {no_scroll}, delayResize: {delay_resize} }};"))
     .build()?;
 
     #[cfg(target_os = "macos")]

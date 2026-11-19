@@ -5,7 +5,6 @@
   import { rankByQuery } from "$lib/utils/fuzzyRank";
   import { useListSelection } from "$lib/components/shared/drivers/useListSelection.svelte";
   import type { RecentQuickAction } from "$lib/services/history";
-  import { ctxMenuDiagMark, ctxMenuDiagSwitches } from "../drivers/ctxMenuDiag";
   import RecentInteractionRow, {
     firstLine,
     secondLine,
@@ -47,16 +46,7 @@
 
   $effect(() => {
     const el = inputEl;
-    if (el) {
-      ctxMenuDiagMark("focus", {
-        inputBottom: el.getBoundingClientRect().bottom,
-        innerHeight: window.innerHeight,
-        bodyScrollTop: document.body.scrollTop,
-      });
-      if (ctxMenuDiagSwitches().noScroll) el.focus({ preventScroll: true });
-      else el.focus();
-      ctxMenuDiagMark("focus-done", { bodyScrollTop: document.body.scrollTop });
-    }
+    el?.focus();
     return () => el?.blur();
   });
 

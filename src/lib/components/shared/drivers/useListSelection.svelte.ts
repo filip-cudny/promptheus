@@ -1,5 +1,4 @@
 import { handleListNavKey } from "$lib/utils/listNavigation";
-import { ctxMenuDiagMark } from "$lib/components/features/context-menu/drivers/ctxMenuDiag";
 
 export function useListSelection(options: {
   count: () => number;
@@ -18,16 +17,7 @@ export function useListSelection(options: {
 
   $effect(() => {
     if (!options.active()) return;
-    const el = itemEls[index];
-    if (el) {
-      ctxMenuDiagMark("scrollIntoView", {
-        index,
-        elBottom: el.getBoundingClientRect().bottom,
-        innerHeight: window.innerHeight,
-        bodyScrollTop: document.body.scrollTop,
-      });
-    }
-    el?.scrollIntoView({ block: "nearest" });
+    itemEls[index]?.scrollIntoView({ block: "nearest" });
   });
 
   function consume(e: KeyboardEvent) {

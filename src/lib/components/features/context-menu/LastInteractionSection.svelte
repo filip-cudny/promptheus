@@ -14,7 +14,6 @@
   import { useCopyFeedback } from "$lib/utils/copyFeedback.svelte";
   import ActionIconButton from "$lib/components/shared/ui/ActionIconButton.svelte";
   import Chip from "$lib/components/shared/ui/Chip.svelte";
-  import { ctxMenuDiagBegin } from "./drivers/ctxMenuDiag";
   import RecentInteractionList from "./components/RecentInteractionList.svelte";
   import type { LastInteractionData } from "./itemExtractors";
   import type { LastInteractionChip, RecentQuickAction } from "$lib/services/history";
@@ -162,10 +161,7 @@
       <ActionIconButton
         icon={ChevronDown}
         active={listOpen}
-        onclick={() => {
-          ctxMenuDiagBegin(listOpen ? "collapse" : "expand");
-          listOpen = !listOpen;
-        }}
+        onclick={() => (listOpen = !listOpen)}
         label="Earlier items"
       />
       <ActionIconButton

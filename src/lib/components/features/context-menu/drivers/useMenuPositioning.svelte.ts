@@ -3,7 +3,6 @@ import { tick } from "svelte";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
 import { debug as logDebug } from "@tauri-apps/plugin-log";
-import { ctxMenuDiagMark, ctxMenuDiagSwitches } from "./ctxMenuDiag";
 import { isFirstPlacementPending, clearFirstPlacementPending } from "$lib/stores/contextMenu.svelte";
 
 interface WorkArea {
@@ -131,36 +130,17 @@ export function useMenuPositioning(opts: Opts) {
     if (!menuEl || !opts.isVisible() || !wa || !placedOrigin) return;
 
     const height = menuEl.scrollHeight + 2;
-    ctxMenuDiagMark("after-tick", {
-      scrollHeight: menuEl.scrollHeight,
-      innerHeight: window.innerHeight,
-      placedOriginX: placedOrigin[0],
-      placedOriginY: placedOrigin[1],
-      bodyScrollTop: document.body.scrollTop,
-    });
     const [x, y] = await clampOrigin(wa, placedOrigin[0], placedOrigin[1], height);
-    ctxMenuDiagMark("clamp", { x, y, height });
     if (gen !== resizeGeneration || !opts.isVisible()) return;
     placedOrigin = [x, y];
 
     const win = getCurrentWebviewWindow();
-    if (ctxMenuDiagSwitches().delayResize) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      if (gen !== resizeGeneration || !opts.isVisible()) return;
-      ctxMenuDiagMark("delay-done");
-    }
-    ctxMenuDiagMark("setSize-start");
     await win.setSize(new LogicalSize(MENU_WIDTH, height));
-    ctxMenuDiagMark("setSize-done");
     if (gen !== resizeGeneration || !opts.isVisible()) return;
     if (wa.shellPlacement) {
-      ctxMenuDiagMark("place-start");
       await invoke("place_context_menu", { x, y, first: false });
-      ctxMenuDiagMark("place-done");
     } else {
-      ctxMenuDiagMark("setPosition-start");
       await win.setPosition(new LogicalPosition(x, y));
-      ctxMenuDiagMark("setPosition-done");
     }
     logDebug(`[ctx-menu] resized keeping top at (${x}, ${y}), size ${MENU_WIDTH}x${height}`);
   }
