@@ -192,7 +192,7 @@
     border-radius: 4px;
     background: var(--surface-overlay);
     color: var(--accent-vivid);
-    font-family: ui-monospace, "JetBrains Mono", monospace;
+    font-family: var(--font-mono);
     font-size: 0.92em;
     font-weight: 500;
     line-height: 1.5;

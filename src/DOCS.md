@@ -9,7 +9,7 @@
 - `lib/shortcuts.ts` — shortcut table and `createHostShortcutHandler` (tab shortcuts + open palette, registered in bubble phase by the shell toolbar and chat windows); `lib/utils/platform.ts` — `isMac`, `isLinux`: the only place that reads `navigator`.
 - `lib/stores/` — rune stores (`*.svelte.ts`); `lib/services/` — per-domain `invoke()` wrappers and event listeners; `lib/types/` — types mirroring Rust structs; `lib/utils/` (`format.ts`: `escapeHtml`, `formatDuration`, relative `formatTimestamp`), `lib/constants/`.
 - `lib/stores/logo.svelte.ts` — the in-app logo follows `appearance.logo`; windows showing it call `initLogo()`. Logo SVGs are imported with `?url` into an `<img>`, never `?raw` (gradient ids collide when inlined twice).
-- `styles/theme.css` — CSS variables; `styles/global.css` — global styles.
+- `styles/theme.css` — CSS variables; `styles/global.css` — global styles; `styles/fonts.css` — bundled font faces (see [styles/DOCS.md](styles/DOCS.md)).
 
 ## Conventions
 
@@ -28,14 +28,14 @@ Store files use `.svelte.ts` extension to enable rune syntax outside components.
 
 This is a multi-window Tauri app. Every window has its own HTML at the project root and, except the static `palette-backdrop.html`, a matching folder under `src/windows/<window-name>/`:
 
-- `entry.ts` — mounts the root component (`mount(App, { target: ... })`).
+- `entry.ts` — imports `$lib/utils/platformAttribute` first (sets `data-platform="linux"` on Linux, also outside Tauri), then mounts the root component (`mount(App, { target: ... })`).
 - `App.svelte` — root component for that window. Keep thin; pull feature UI from `lib/components/`.
 - No inline `<style>` in a window's HTML: it would lose to the bundled `global.css` in production (the bundled stylesheet is linked after it). A transparent window overrides the `html, body` background in its App root (`:global(html), :global(body) { background: transparent; }`). Exception: `image-preview.html` uses inline `!important`.
 
 Adding a new window:
 
 1. Create `<name>.html` at project root with `<script type="module" src="/src/windows/<name>/entry.ts">`.
-2. Create `src/windows/<name>/{entry.ts, App.svelte}`.
+2. Create `src/windows/<name>/{entry.ts, App.svelte}`; `entry.ts` imports `$lib/utils/platformAttribute` first.
 3. Add the HTML to `vite.config.ts → rollupOptions.input`.
 4. Add the window label to `src-tauri/capabilities/default.json → windows` (child webviews go in `webviews`).
 5. Build the window in Rust (`src-tauri/src/setup/windows.rs` for windows created at startup); `tauri.conf.json` has `"windows": []`.

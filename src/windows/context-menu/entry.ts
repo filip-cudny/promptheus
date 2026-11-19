@@ -1,3 +1,4 @@
+import "$lib/utils/platformAttribute";
 import { attachConsole } from "@tauri-apps/plugin-log";
 import App from "./App.svelte";
 import { mount } from "svelte";

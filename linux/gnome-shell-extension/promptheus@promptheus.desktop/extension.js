@@ -985,7 +985,7 @@ export default class PromptheusExtension extends Extension {
         const actor = new St.BoxLayout({
             style: 'width: 300px; background-color: #ffffff; border: 1px solid rgba(200,200,200,0.9); ' +
                 'border-radius: 8px; padding: 12px 16px; spacing: 10px; ' +
-                'font-family: "Noto Sans", sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.15);',
+                'font-family: "Inter", "Noto Sans", sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.15);',
             opacity: 0,
             scale_x: 0.01,
             scale_y: 0.05,
@@ -1146,7 +1146,7 @@ export default class PromptheusExtension extends Extension {
         const actor = new St.BoxLayout({
             vertical: true,
             style: `border-radius: ${WIDGET_RADIUS}px; background-color: rgba(28,28,30,0.92); ` +
-                'color: #e5e5e7; font-family: "Noto Sans", sans-serif; font-size: 13px; ' +
+                'color: #e5e5e7; font-family: "Inter", "Noto Sans", sans-serif; font-size: 13px; ' +
                 'box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);',
             reactive: true,
             can_focus: false,
@@ -1676,7 +1676,7 @@ export default class PromptheusExtension extends Extension {
         if (widget.dropdown)
             return;
         const style = 'background-color: #252629; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; ' +
-            'color: #e5e5e7; font-family: "Noto Sans", sans-serif; font-size: 12px;';
+            'color: #e5e5e7; font-family: "Inter", "Noto Sans", sans-serif; font-size: 12px;';
         let popover;
         if (imagePath) {
             popover = new St.Widget({
@@ -1771,7 +1771,7 @@ export default class PromptheusExtension extends Extension {
         const tooltip = new St.Bin({
             reactive: false,
             style: 'background-color: #252629; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; ' +
-                'color: #e5e5e7; font-family: "Noto Sans", sans-serif; font-size: 12px; ' +
+                'color: #e5e5e7; font-family: "Inter", "Noto Sans", sans-serif; font-size: 12px; ' +
                 `padding: 0 ${WIDGET_TOOLTIP_PADDING_X}px;`,
             child: new St.Label({text, y_align: Clutter.ActorAlign.CENTER}),
         });
@@ -1832,7 +1832,7 @@ export default class PromptheusExtension extends Extension {
             can_focus: false,
             style: `padding: ${WIDGET_DROPDOWN_PADDING}px 0; border-radius: ${WIDGET_RADIUS}px; ` +
                 'background-color: rgba(28,28,30,0.92); color: #e5e5e7; ' +
-                'font-family: "Noto Sans", sans-serif; font-size: 13px;',
+                'font-family: "Inter", "Noto Sans", sans-serif; font-size: 13px;',
         });
         dropdown.set_size(WIDGET_WIDTH, height);
         const rowRadius = WIDGET_RADIUS - WIDGET_DROPDOWN_PADDING;

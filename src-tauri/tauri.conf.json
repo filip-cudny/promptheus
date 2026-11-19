@@ -22,7 +22,7 @@
     "targets": "all",
     "linux": {
       "deb": {
-        "depends": ["wl-clipboard"],
+        "depends": ["wl-clipboard", "fonts-inter"],
         "files": {
           "/usr/share/gnome-shell/extensions/promptheus@promptheus.desktop/metadata.json": "../linux/gnome-shell-extension/promptheus@promptheus.desktop/metadata.json",
           "/usr/share/gnome-shell/extensions/promptheus@promptheus.desktop/extension.js": "../linux/gnome-shell-extension/promptheus@promptheus.desktop/extension.js",

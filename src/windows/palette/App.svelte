@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { isLinux } from "$lib/utils/platform";
   import { initLogo } from "$lib/stores/logo.svelte";
   import Palette from "$lib/components/features/palette/Palette.svelte";
   import { usePaletteIpc } from "$lib/components/features/palette/drivers/usePaletteIpc.svelte";
@@ -12,7 +11,6 @@
   });
 
   onMount(() => {
-    if (isLinux) document.documentElement.setAttribute("data-platform", "linux");
     initLogo();
     ipc.init();
   });

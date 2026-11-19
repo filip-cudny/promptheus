@@ -1,3 +1,4 @@
+import "$lib/utils/platformAttribute";
 import { mount } from "svelte";
 import App from "./App.svelte";
 

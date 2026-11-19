@@ -125,12 +125,12 @@ sudo pacman -S --needed \
 
 To build a local package:
 
-- `pnpm bundle:linux` builds a `.deb` that also installs the GNOME Shell extension; it lands in `src-tauri/target/release/bundle/deb/`, or under the cargo `target-dir` when one is configured.
+- `pnpm bundle:linux` builds a `.deb` that also installs the GNOME Shell extension; it lands in `src-tauri/target/release/bundle/deb/`, or under the cargo `target-dir` when one is configured. Install it with `sudo apt install ./<file>.deb`, which also installs `fonts-inter`; `dpkg -i` does not install dependencies.
 - `pnpm bundle:mac` builds a `.app` under `src-tauri/target/release/bundle/`.
 
 Platform notes:
 
-- **GNOME Wayland**: global shortcuts, menu placement and the recording pill need the GNOME Shell extension. The `.deb` installs it; from source, run `linux/gnome-shell-extension/install-dev.sh`. Then log out and in, and run `gnome-extensions enable promptheus@promptheus.desktop`.
+- **GNOME Wayland**: global shortcuts, menu placement and the recording pill need the GNOME Shell extension. The `.deb` installs it; from source, run `linux/gnome-shell-extension/install-dev.sh`. Then log out and in, and run `gnome-extensions enable promptheus@promptheus.desktop`. A source run needs `sudo apt install fonts-inter` for the font of the GNOME pill, toasts and dropdown; without it they fall back to Noto Sans.
 - **macOS**: two features need the Accessibility permission for the app: adding text selected in another app to the recording pill, and sending a transcript to Claude Desktop.
 
 ## First run
