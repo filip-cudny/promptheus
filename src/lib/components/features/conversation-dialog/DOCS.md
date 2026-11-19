@@ -71,10 +71,18 @@ This avoids feedback loops while preserving the cursor on user typing and resett
 
 ### Global context loading
 
-`getGlobalContext()` (`stores/conversation.svelte.ts`) reads `get_context_items` and `get_labelled_context` and returns `{ text, images }`: `text` is the labelled `<pasted-text name="Text #N">` blocks (empty without text items), `images` carry the item `number`. The numbers go into the chat prompt (`[Context Image #N]`), token count, execution and history (`image_index = number - 1`). `ContextSection.saveContext` runs `unwrapContextBlocks` on the field (only `<pasted-text name="Text #N">` blocks; text outside them is kept; the `\n\n` between consecutive blocks becomes `\n`), saves it as one text item and reloads the tab from `getGlobalContext()`. Two callers:
+`getGlobalContext()` (`stores/conversation.svelte.ts`) reads `get_context_items` and `get_labelled_context` and returns `{ text, images }`: `text` is the labelled `<pasted-text name="Text #N">` blocks (empty without text items), `images` carry the item `number`. The numbers go into the chat prompt (`[Context Image #N]`), token count, execution and history (`image_index = number - 1`). `ContextSection.saveContext` runs `unwrapContextBlocks` on the field (only `<pasted-text name="Text #N">` blocks; text outside them is kept; the `\n\n` between consecutive blocks becomes `\n`), saves it as one text item and reloads the tab from `getGlobalContext()`.
 
-1. `ContextSection` starts its local text/images from the active tab's stored context (so mounting never overwrites context the store already loaded) and on mount refills them from it.
-2. `store.loadGlobalContextIntoActiveTab()` writes it into the active tab; `handleVoiceInput` awaits it before `sendMessage()` when `autoSend`, then shows the context section collapsed, so the auto-sent message carries the context (a window just created via `applyInitParams`, a window already open via the `voice-input` event).
+The store holds the window's current global context (`globalContext`) and `globalVersion`, the last applied `context-changed` version. The rule (which tab follows, own version, hint, version guard) lives in `utils/contextFollow.ts`, tested by `tests/contextFollow.test.mjs`; the store only calls it, with one `getGlobalContext()` per event or refresh for all tabs.
+
+- Init: `App.svelte` `onMount` awaits `store.initGlobalContext()` after `initFromSettings()` and before `tryReconnect()`; a failure is logged, not thrown.
+- `context-changed`: `store.handleGlobalContextChanged(version)` fetches once; a result older than `globalVersion` is dropped, else `applyGlobalChange` runs: following tabs, active or not, take the global context; own-version tabs keep theirs and get the hint when it differs. Save emits several events (clear, each image, text); the fetch of an earlier event may return later than a newer one, which the version guard drops.
+- Refresh: `store.refreshGlobalContext()` fetches and `syncFollowingTabs` updates only following tabs (own-version tabs and their hint untouched). Used by init, the pill auto-send in `handleVoiceInput` (awaited before `sendMessage()`, so the auto-sent message carries the context) and Save.
+- Which tabs follow: every tab made by `addTab`, `openForSkill` and the replacement tab of `closeTab` / `closeTabWithSuccessor` starts following (`followGlobal`); a reused clean tab keeps its context and flags. A tab restored from history has its own version (`restoreOwnVersion`) and the hint when its context differs from the global one.
+- Own version: set only by `editActiveContextText`, `editActiveContextImages` and `clearActiveContext` (Trash and X) through `editContext`. `keepActiveOwnContext` hides the hint, `useGlobalContextInActiveTab` makes the tab follow again. `saveActiveContextAsGlobal` writes the active tab's context to the global store, then the tab follows (after the writes, so the intermediate empty context never reaches it) and a refresh runs.
+- Pill auto-send: `handleVoiceInput` adds a new tab when the active tab has messages, or with `autoSend` when it has its own version, so the edited version is never overwritten.
+
+`ContextSection` starts its local text/images from the active tab's stored context (so mounting never overwrites context the store already loaded) and on mount refills them from it.
 
 ### Voice-input source
 

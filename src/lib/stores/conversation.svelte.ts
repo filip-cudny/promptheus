@@ -39,9 +39,25 @@ import type {
 import { hasUserContent } from "$lib/types";
 import type { ConversationNodeForExecution } from "$lib/types/ai";
 import { invoke } from "@tauri-apps/api/core";
-import { getContextItems, getLabelledContext } from "$lib/services/context";
+import {
+  appendContext,
+  appendContextImage,
+  clearContext,
+  getContextItems,
+  getLabelledContext,
+} from "$lib/services/context";
 import type { InvocationSource } from "$lib/types/history";
 import { PASTED_TEXT_BLOCK } from "$lib/utils/contextBlocks";
+import {
+  acceptsGlobalResult,
+  applyGlobalChange,
+  editContext,
+  followGlobal,
+  keepOwnVersion,
+  restoreOwnVersion,
+  syncFollowingTabs,
+  type ContextValue,
+} from "$lib/utils/contextFollow";
 
 export async function getGlobalContext(): Promise<{
   text: string;
@@ -180,6 +196,8 @@ function createTabState(
     tree: createEmptyTree(),
     context_text: "",
     context_images: [],
+    context_own: false,
+    context_hint: false,
     input_text: "",
     input_images: [],
     input_text_attachments: [],
@@ -281,6 +299,9 @@ export function createConversationStore(
   function tabDefaults(): TabDefaults {
     return { modelId: windowDefaultModelId, reasoningEffort: windowDefaultReasoningEffort, selectedTools: windowDefaultSelectedTools };
   }
+
+  let globalContext = $state<ContextValue>({ text: "", images: [] });
+  let globalVersion = 0;
 
   const firstTab = createTabState();
   let tabs = $state<TabState[]>([firstTab]);
@@ -913,6 +934,7 @@ export function createConversationStore(
       return false;
     } else {
       const newTab = createTabState(skillName || null, tabDefaults());
+      followGlobal(newTab, globalContext);
       newTab.input_text = prefix;
       newTab.pristine_input = prefix || null;
       if (skillModel) newTab.model_id = skillModel;
@@ -932,10 +954,74 @@ export function createConversationStore(
     if (tab) tab.model_id = modelId;
   }
 
-  async function loadGlobalContextIntoActiveTab(): Promise<void> {
-    const { text, images } = await getGlobalContext();
-    updateContextText(text);
-    updateContextImages(images);
+  async function handleGlobalContextChanged(version: number): Promise<void> {
+    let value: ContextValue;
+    try {
+      value = await getGlobalContext();
+    } catch (e) {
+      logError("Failed to fetch global context after change: " + e);
+      return;
+    }
+    if (!acceptsGlobalResult(globalVersion, version)) return;
+    globalVersion = version;
+    globalContext = value;
+    applyGlobalChange(tabs, value);
+  }
+
+  async function refreshGlobalContext(): Promise<void> {
+    const version = globalVersion;
+    const value = await getGlobalContext();
+    if (!acceptsGlobalResult(globalVersion, version)) return;
+    globalContext = value;
+    syncFollowingTabs(tabs, value);
+  }
+
+  async function initGlobalContext(): Promise<void> {
+    try {
+      await refreshGlobalContext();
+    } catch (e) {
+      logError("Failed to load global context: " + e);
+    }
+  }
+
+  function editActiveContextText(text: string): void {
+    const tab = getTab(activeTabId);
+    if (tab) editContext(tab, { text, images: tab.context_images });
+  }
+
+  function editActiveContextImages(images: ConversationImage[]): void {
+    const tab = getTab(activeTabId);
+    if (tab) editContext(tab, { text: tab.context_text, images });
+  }
+
+  function clearActiveContext(): void {
+    const tab = getTab(activeTabId);
+    if (tab) editContext(tab, { text: "", images: [] });
+  }
+
+  function keepActiveOwnContext(): void {
+    const tab = getTab(activeTabId);
+    if (tab) keepOwnVersion(tab);
+  }
+
+  function useGlobalContextInActiveTab(): void {
+    const tab = getTab(activeTabId);
+    if (tab) followGlobal(tab, globalContext);
+  }
+
+  async function saveActiveContextAsGlobal(): Promise<void> {
+    const tab = getTab(activeTabId);
+    if (!tab) return;
+    await clearContext();
+    for (const img of tab.context_images) {
+      await appendContextImage(img.data, img.media_type);
+    }
+    const savedText = unwrapContextBlocks(tab.context_text);
+    if (savedText.trim()) {
+      await appendContext(savedText);
+    }
+    followGlobal(tab, globalContext);
+    await refreshGlobalContext();
   }
 
   function setPristineInput(text: string): void {
@@ -951,6 +1037,7 @@ export function createConversationStore(
       return;
     }
     const newTab = createTabState(null, tabDefaults());
+    followGlobal(newTab, globalContext);
     tabs.push(newTab);
     activeTabId = newTab.tab_id;
   }
@@ -998,6 +1085,7 @@ export function createConversationStore(
 
     if (tabs.length <= 1) {
       tabs[0] = createTabState("New chat", tabDefaults());
+      followGlobal(tabs[0], globalContext);
       activeTabId = tabs[0].tab_id;
       return;
     }
@@ -1017,6 +1105,7 @@ export function createConversationStore(
 
     if (tabs.length <= 1) {
       tabs[0] = createTabState("New chat", tabDefaults());
+      followGlobal(tabs[0], globalContext);
       activeTabId = tabs[0].tab_id;
       return;
     }
@@ -1261,10 +1350,17 @@ export function createConversationStore(
         current_path: [],
       };
 
+      const restoredData = entry.conversation_data;
+      restoreOwnVersion(
+        newTab,
+        restoredData
+          ? { text: restoredData.context_text, images: restoredData.context_images ?? [] }
+          : { text: "", images: [] },
+        globalContext,
+      );
+
       if (entry.conversation_data) {
         const data = entry.conversation_data;
-        newTab.context_text = data.context_text;
-        newTab.context_images = data.context_images ?? [];
         newTab.model_id = data.model_id ?? null;
         newTab.reasoning_effort = data.reasoning_effort ?? null;
         restoredTree.root_node_id = data.root_node_id;
@@ -1417,6 +1513,15 @@ export function createConversationStore(
     get contextImages() {
       return contextImages;
     },
+    get contextOwn() {
+      return activeTab.context_own;
+    },
+    get contextHint() {
+      return activeTab.context_hint;
+    },
+    get globalContext() {
+      return globalContext;
+    },
     get inputText() {
       return inputText;
     },
@@ -1493,7 +1598,15 @@ export function createConversationStore(
     saveToHistory,
     setActiveTabInvocationSource,
     setActiveTabModelId,
-    loadGlobalContextIntoActiveTab,
+    handleGlobalContextChanged,
+    refreshGlobalContext,
+    initGlobalContext,
+    editActiveContextText,
+    editActiveContextImages,
+    clearActiveContext,
+    keepActiveOwnContext,
+    useGlobalContextInActiveTab,
+    saveActiveContextAsGlobal,
     restoreFromHistory,
     isTabClean,
     destroy,

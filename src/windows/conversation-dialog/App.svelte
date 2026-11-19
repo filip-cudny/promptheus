@@ -177,7 +177,11 @@
     copyToken: string | null,
   ) {
     const currentTab = store.tabs.find((t) => t.tab_id === store.activeTabId);
-    if (currentTab && currentTab.tree.current_path.length > 0) {
+    if (
+      currentTab &&
+      (currentTab.tree.current_path.length > 0 ||
+        (autoSend && currentTab.context_own))
+    ) {
       store.addTab();
     }
     store.setActiveTabInvocationSource(invocationSource ?? "alternative_execute");
@@ -187,7 +191,7 @@
     if (!autoSend) return;
     if (!contextDisabled) {
       try {
-        await store.loadGlobalContextIntoActiveTab();
+        await store.refreshGlobalContext();
       } catch (err) {
         console.error("load global context failed", err);
       }
@@ -252,7 +256,10 @@
       if (chatPaletteOpen) chatPaletteOpen = false;
       reloadActiveProvider();
     },
-    onContextChanged: () => autoShowContextIfNeeded(),
+    onContextChanged: (version) => {
+      store.handleGlobalContextChanged(version);
+      autoShowContextIfNeeded();
+    },
   });
 
   let detachEdgeResizeCursor: (() => void) | null = null;
@@ -277,6 +284,7 @@
     }
     skillsStore.init();
     await store.initFromSettings();
+    await store.initGlobalContext();
     loadModelInfo();
 
     const reconnected = await store.tryReconnect();

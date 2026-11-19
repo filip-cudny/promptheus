@@ -47,6 +47,8 @@ export interface TabState {
   tree: ConversationTree;
   context_text: string;
   context_images: ConversationImage[];
+  context_own: boolean;
+  context_hint: boolean;
   input_text: string;
   input_images: ConversationImage[];
   input_text_attachments: string[];

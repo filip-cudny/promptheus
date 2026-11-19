@@ -20,7 +20,7 @@ export function useConversationDialogIpc(opts: {
   onActiveProviderChanged: (providerId: string | null) => void;
   onActiveProviderCleared: () => void;
   onMenuReloadActive: () => void;
-  onContextChanged: () => void;
+  onContextChanged: (version: number) => void;
 }) {
   let unlistens: UnlistenFn[] = [];
 
@@ -80,7 +80,7 @@ export function useConversationDialogIpc(opts: {
       { target: opts.selfTarget },
     );
 
-    const u7 = await onContextChanged(() => opts.onContextChanged());
+    const u7 = await onContextChanged((payload) => opts.onContextChanged(payload.version));
 
     const u8 = await listen<{ tab_id: string }>(
       "chat:activate-tab",
