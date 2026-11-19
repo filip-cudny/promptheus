@@ -4,7 +4,6 @@
   import { prefersReducedMotion } from "svelte/motion";
   import { fade } from "svelte/transition";
   import { invoke } from "@tauri-apps/api/core";
-  import type { ContextItem } from "$lib/types/context";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import { attachConsole, error as logError } from "@tauri-apps/plugin-log";
   import {
@@ -22,7 +21,7 @@
   import { ScanSquare, TextSelect } from "lucide-static";
   import { isMac } from "$lib/utils/platform";
   import claudeIcon from "$lib/icons/providers/claude.svg?raw";
-  import chatgptIcon from "$lib/icons/providers/chatgpt.svg?raw";
+  import { PADDING_X, PILL_WIDTH, RADIUS, dropdownSeparatorIndex, run, type PillItem, type PillModel } from "./pill";
 
   type WidgetState = "recording" | "paused" | "processing" | "retrying" | "done";
 
@@ -36,61 +35,22 @@
     delayMs?: number;
   }
 
-  interface PillTarget {
-    id: string;
-    label: string;
-  }
-
-  interface PillItem {
-    index: number;
-    kind: "text" | "image";
-    label: string;
-    preview: string;
-    thumbnail?: string;
-  }
-
   type PopupKind = keyof typeof POPUP_COMMANDS;
 
-  type PreviewContent = { kind: "text"; text: string } | { kind: "image"; src: string };
-
-  interface PillModel {
-    targets: PillTarget[];
-    selectedId: string;
-    selectedLabel: string;
-    targetLocked: boolean;
-    items: PillItem[];
-    itemRows: number;
-    contextVersion: number;
-    stopChatDestination: string;
-  }
-
-  const PILL_WIDTH = 264;
   const PILL_HEIGHT = 72;
   const MAX_ITEM_ROWS = 3;
   const ITEM_ROW_HEIGHT = 24;
   const ITEM_ROW_GAP = 4;
   const ITEMS_ROW_PADDING = 10;
-  const PREVIEW_MAX_HEIGHT = 160;
-  const PREVIEW_GAP = 6;
   const PREVIEW_DELAY_MS = 300;
   const TOOLTIP_DELAY_MS = 700;
   const TOOLTIP_CHAIN_MS = 500;
-  const TOOLTIP_HEIGHT = 24;
-  const TOOLTIP_PADDING_X = 8;
   const ACTION_ICON_SIZE = 16;
   const POPUP_COMMANDS = { preview: "set_recording_widget_preview", tooltip: "set_recording_widget_tooltip" } as const;
   const ROW_HEIGHT = PILL_HEIGHT / 2;
-  const RADIUS = 16;
-  const PADDING_X = 14;
   const CHIP_GAP = 4;
   const IMAGE_CHIP_GAP = 5;
   const IMAGE_COLUMNS = 3;
-  const DROPDOWN_ROW_HEIGHT = 28;
-  const DROPDOWN_PADDING = 4;
-  const DROPDOWN_SEPARATOR_HEIGHT = 9;
-  const TARGET_ICONS: Record<string, string> = { "webview:claude": claudeIcon, "webview:chatgpt": chatgptIcon };
-  const TARGET_ICON_SIZE = 14;
-  const TARGET_ICON_GAP = 8;
   const DEFAULT_TARGET_LABEL = "Dictation";
   const BAR_WIDTH = 2;
   const BAR_GAP = 3;
@@ -137,11 +97,6 @@
     stopChatDestination: "",
   });
   let dropdownOpen = $state(false);
-  let overlayUp = $state(false);
-  let previewContent = $state<PreviewContent | null>(null);
-  let previewElement = $state<HTMLElement>();
-  let previewOverflows = $state(false);
-  let tooltip = $state<{ text: string; centerX: number } | null>(null);
   let hoveredIndex: number | null = null;
   let hoveredButton: HTMLButtonElement | null = null;
   let hoverTimer: ReturnType<typeof setTimeout> | undefined;
@@ -154,7 +109,6 @@
   let tooltipRequested = false;
   let tooltipHiddenAt = -Infinity;
   let previewQueue: Promise<void> = Promise.resolve();
-  let contextItems: ContextItem[] | null = null;
   let unlisteners: UnlistenFn[] = [];
 
   const clock = $derived.by(() => {
@@ -178,14 +132,6 @@
   const stopChatTooltip = $derived(
     model.stopChatDestination ? `Stop and send to ${model.stopChatDestination}` : "Stop and open chat",
   );
-  const dropdownHeight = $derived(
-    model.targets.length * DROPDOWN_ROW_HEIGHT + 2 * DROPDOWN_PADDING + (hasSeparator ? DROPDOWN_SEPARATOR_HEIGHT : 0),
-  );
-
-  function dropdownSeparatorIndex(targets: { id: string }[]): number {
-    const lastWebview = targets.findLastIndex((target) => target.id.startsWith("webview:"));
-    return lastWebview >= 0 && lastWebview < targets.length - 1 ? lastWebview : -1;
-  }
 
   function chipText(preview: string): string {
     return preview.replace(/\s+/g, " ").trim();
@@ -218,14 +164,6 @@
     return Math.max(MIN_BAR, Math.min(1, level * factor));
   }
 
-  async function run(command: string, args?: Record<string, unknown>) {
-    try {
-      await invoke(command, args);
-    } catch (e) {
-      logError(`${command} failed: ${e}`);
-    }
-  }
-
   function runAction(command: string) {
     hideTooltip();
     return run(command);
@@ -247,12 +185,10 @@
     previewQueue = previewQueue.then(task);
   }
 
-  async function openPopup(kind: PopupKind): Promise<boolean> {
-    if (backendOverlay === kind) return true;
+  async function openPopup(kind: PopupKind, args: Record<string, unknown>): Promise<boolean> {
     try {
-      const direction = await invoke<string>(POPUP_COMMANDS[kind], { open: true });
+      await invoke(POPUP_COMMANDS[kind], { open: true, ...args });
       backendOverlay = kind;
-      overlayUp = direction === "up";
       return true;
     } catch (e) {
       logError(`${POPUP_COMMANDS[kind]} failed: ${e}`);
@@ -272,12 +208,10 @@
     clearTimeout(hoverTimer);
     hoveredIndex = null;
     previewToken++;
-    previewContent = null;
     previewRequested = false;
     clearTimeout(tooltipTimer);
     tooltipTarget = null;
     tooltipToken++;
-    tooltip = null;
     tooltipRequested = false;
     backendOverlay = null;
   }
@@ -286,7 +220,6 @@
     clearTimeout(hoverTimer);
     hoveredIndex = null;
     previewToken++;
-    previewContent = null;
     if (!previewRequested) return;
     previewRequested = false;
     closePopup("preview");
@@ -295,7 +228,6 @@
   function hideTooltip() {
     clearTimeout(tooltipTimer);
     tooltipToken++;
-    tooltip = null;
     if (!tooltipRequested) return;
     tooltipRequested = false;
     tooltipHiddenAt = performance.now();
@@ -310,13 +242,7 @@
     tooltipRequested = true;
     enqueuePreviewCall(async () => {
       if (token !== tooltipToken) return;
-      if (!(await openPopup("tooltip"))) {
-        tooltipRequested = false;
-        return;
-      }
-      if (token !== tooltipToken) return;
-      previewContent = null;
-      tooltip = { text, centerX: rect.left + rect.width / 2 };
+      if (!(await openPopup("tooltip", { text, centerX: rect.left + rect.width / 2 }))) tooltipRequested = false;
     });
   }
 
@@ -329,39 +255,15 @@
     tooltipTimer = setTimeout(() => showTooltip(target), chained ? 0 : TOOLTIP_DELAY_MS);
   }
 
-  function placeTooltip(node: HTMLElement, centerX: number) {
-    node.style.left = `${Math.max(0, Math.min(centerX - node.offsetWidth / 2, PILL_WIDTH - node.offsetWidth))}px`;
-  }
-
-  async function loadPreviewContent(item: PillItem): Promise<PreviewContent | null> {
-    if (item.kind === "text") return { kind: "text", text: item.preview };
-    try {
-      contextItems ??= await invoke<ContextItem[]>("get_context_items");
-    } catch (e) {
-      logError(`get_context_items failed: ${e}`);
-      return null;
-    }
-    const source = contextItems[item.index];
-    if (source?.item_type !== "image") return null;
-    return { kind: "image", src: `data:${source.media_type};base64,${source.data}` };
-  }
-
-  async function showPreview(index: number) {
+  function showPreview(index: number) {
     const item = model.items.find((candidate) => candidate.index === index);
     if (!item || dropdownOpen) return;
     const token = ++previewToken;
-    const content = await loadPreviewContent(item);
-    if (!content || token !== previewToken || dropdownOpen) return;
     previewRequested = true;
     enqueuePreviewCall(async () => {
       if (token !== previewToken) return;
-      if (!(await openPopup("preview"))) {
-        previewRequested = false;
-        return;
-      }
-      if (token !== previewToken) return;
-      tooltip = null;
-      previewContent = content;
+      const text = item.kind === "text" ? item.preview : null;
+      if (!(await openPopup("preview", { index: item.index, text }))) previewRequested = false;
     });
   }
 
@@ -391,12 +293,11 @@
     hidePreview();
     hideTooltip();
     try {
-      const direction = await invoke<string>("set_recording_widget_dropdown", {
+      await invoke("set_recording_widget_dropdown", {
         open: true,
         rows: model.targets.length,
         separator: hasSeparator,
       });
-      overlayUp = direction === "up";
       dropdownOpen = true;
     } catch (e) {
       logError(`set_recording_widget_dropdown failed: ${e}`);
@@ -415,13 +316,6 @@
 
   $effect(() => {
     if (!interactive && dropdownOpen) closeDropdown();
-  });
-
-  $effect(() => {
-    previewOverflows =
-      previewContent?.kind === "text" &&
-      !!previewElement &&
-      previewElement.scrollHeight > previewElement.clientHeight;
   });
 
   $effect(() => {
@@ -447,7 +341,6 @@
       }),
       listen<PillModel>("recording-widget-model", (event) => {
         model = event.payload;
-        contextItems = null;
       }),
       listen<{ x: number; y: number } | null>("recording-widget-pointer", (event) => onPointer(event.payload)),
       listen("recording-widget-dropdown-closed", () => {
@@ -476,7 +369,7 @@
   </button>
 {/snippet}
 
-<div class="root" class:up={overlayUp} style:--radius="{RADIUS}px">
+<div class="root" style:--radius="{RADIUS}px">
   <div class="pill" class:mac={isMac} style:height="{pillHeight}px" style:padding="0 {PADDING_X}px" data-tauri-drag-region>
     {#if hasItems}
       <div class="items" style:height="{itemsHeight(model.itemRows)}px" style:gap="{ITEM_ROW_GAP}px" data-tauri-drag-region>
@@ -628,65 +521,6 @@
       </div>
     </div>
   </div>
-  {#if dropdownOpen}
-    <div
-      class="dropdown"
-      class:mac={isMac}
-      style:height="{dropdownHeight}px"
-      style:padding="{DROPDOWN_PADDING}px 0"
-      style:--row-radius="{RADIUS - DROPDOWN_PADDING}px"
-    >
-      {#each model.targets as target, index (target.id)}
-        <button
-          type="button"
-          class="option"
-          class:selected={target.id === model.selectedId}
-          tabindex="-1"
-          style:height="{DROPDOWN_ROW_HEIGHT}px"
-          style:padding="0 {PADDING_X}px"
-          style:gap="{TARGET_ICON_GAP}px"
-          onclick={() => selectTarget(target.id)}
-        >
-          {#if TARGET_ICONS[target.id]}
-            <span class="option-icon" style:--icon-size="{TARGET_ICON_SIZE}px" aria-hidden="true">{@html TARGET_ICONS[target.id]}</span>
-          {/if}
-          {target.label}
-        </button>
-        {#if index === separatorIndex}
-          <div class="separator" style:height="1px" style:margin="{(DROPDOWN_SEPARATOR_HEIGHT - 1) / 2}px {PADDING_X}px"></div>
-        {/if}
-      {/each}
-    </div>
-  {/if}
-  {#if previewContent}
-    <div
-      bind:this={previewElement}
-      class="preview"
-      class:image={previewContent.kind === "image"}
-      class:faded={previewOverflows}
-      style:max-height="{PREVIEW_MAX_HEIGHT}px"
-      style:margin-top={overlayUp ? undefined : `${PREVIEW_GAP}px`}
-      style:margin-bottom={overlayUp ? `${PREVIEW_GAP}px` : undefined}
-    >
-      {#if previewContent.kind === "image"}
-        <img src={previewContent.src} alt="" />
-      {:else}
-        {previewContent.text}
-      {/if}
-    </div>
-  {/if}
-  {#if tooltip}
-    <div
-      class="tooltip"
-      use:placeTooltip={tooltip.centerX}
-      style:height="{TOOLTIP_HEIGHT}px"
-      style:padding="0 {TOOLTIP_PADDING_X}px"
-      style:margin-top={overlayUp ? undefined : `${PREVIEW_GAP}px`}
-      style:margin-bottom={overlayUp ? `${PREVIEW_GAP}px` : undefined}
-    >
-      {tooltip.text}
-    </div>
-  {/if}
 </div>
 
 <style>
@@ -709,13 +543,7 @@
     flex-direction: column;
   }
 
-  .root.up {
-    flex-direction: column-reverse;
-    justify-content: flex-start;
-  }
-
-  .pill,
-  .dropdown {
+  .pill {
     box-sizing: border-box;
     flex: none;
     border-radius: var(--radius);
@@ -724,8 +552,7 @@
     font-size: 13px;
   }
 
-  .pill.mac,
-  .dropdown.mac {
+  .pill.mac {
     background: rgba(28, 28, 30, 0.92);
   }
 
@@ -759,55 +586,6 @@
 
   .image-line {
     display: flex;
-  }
-
-  .preview,
-  .tooltip {
-    box-sizing: border-box;
-    flex: none;
-    border: 1px solid var(--surface-floating-popover-border);
-    border-radius: var(--surface-floating-popover-radius);
-    background: var(--surface-floating-popover);
-    color: #e5e5e7;
-    font-size: 12px;
-  }
-
-  .preview {
-    position: relative;
-    overflow: hidden;
-    padding: 8px;
-    white-space: pre-wrap;
-  }
-
-  .preview.faded::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 36px;
-    background: linear-gradient(transparent, var(--surface-floating-popover));
-  }
-
-  .tooltip {
-    position: relative;
-    align-self: flex-start;
-    display: flex;
-    align-items: center;
-    width: max-content;
-    white-space: nowrap;
-  }
-
-  .preview.image {
-    height: 160px;
-    padding: 0;
-  }
-
-  .preview img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
   }
 
   .chip {
@@ -898,33 +676,6 @@
     text-align: left;
   }
 
-  .dropdown {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .option {
-    width: 100%;
-    justify-content: flex-start;
-    border-radius: 0;
-    font: inherit;
-  }
-
-  .option:first-child {
-    border-top-left-radius: var(--row-radius);
-    border-top-right-radius: var(--row-radius);
-  }
-
-  .option:last-child {
-    border-bottom-left-radius: var(--row-radius);
-    border-bottom-right-radius: var(--row-radius);
-  }
-
-  .separator {
-    flex: none;
-    background: rgba(255, 255, 255, 0.12);
-  }
-
   .option-icon {
     display: flex;
     flex: none;
@@ -935,10 +686,6 @@
   .option-icon :global(svg) {
     width: 100%;
     height: 100%;
-  }
-
-  .option.selected {
-    font-weight: 700;
   }
 
   .bars {

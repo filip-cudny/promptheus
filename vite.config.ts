@@ -44,6 +44,7 @@ export default defineConfig({
         "text-preview": path.resolve("./text-preview.html"),
         notification: path.resolve("./notification.html"),
         "recording-widget": path.resolve("./recording-widget.html"),
+        "recording-widget-overlay": path.resolve("./recording-widget-overlay.html"),
       },
     },
   },
