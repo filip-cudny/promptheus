@@ -7,8 +7,8 @@ mod macos;
 pub use macos::capture as capture_macos;
 
 #[cfg(target_os = "linux")]
-pub async fn capture_gnome() -> Option<String> {
-    let reply = async { crate::services::gnome_shell::proxy().await?.capture_selection().await }.await;
+pub async fn capture_gnome(owner_title: &str) -> Option<String> {
+    let reply = async { crate::services::gnome_shell::proxy().await?.capture_selection(owner_title).await }.await;
     match reply {
         Ok((outcome, text)) if outcome == "captured" => Some(text),
         Ok((outcome, _)) => {
@@ -43,6 +43,9 @@ pub fn is_current(run: u64) -> bool {
     RUN.load(Ordering::SeqCst) == run
 }
 
+#[cfg(test)]
+pub(super) static RUN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Rect {
     pub x: f64,
@@ -67,6 +70,7 @@ pub struct Sample {
     pub arrow: bool,
     pub command: bool,
     pub a_key: bool,
+    pub owner_key: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -94,7 +98,7 @@ impl Trigger {
 
 #[derive(Default)]
 pub struct TriggerDetector {
-    pub pill: Rect,
+    pub exclude: Rect,
     left_down: bool,
     press: Option<(f64, f64)>,
     last_release_ms: Option<u64>,
@@ -112,6 +116,9 @@ impl TriggerDetector {
         let keys = self.key_trigger(s);
         self.left_down = s.left_down;
         self.a_down = s.a_key;
+        if s.owner_key {
+            return None;
+        }
         pointer.or(keys)
     }
 
@@ -120,7 +127,7 @@ impl TriggerDetector {
             return None;
         }
         if s.left_down {
-            self.press = (!self.pill.contains(s.x, s.y)).then_some((s.x, s.y));
+            self.press = (!s.owner_key && !self.exclude.contains(s.x, s.y)).then_some((s.x, s.y));
             return None;
         }
         let (press_x, press_y) = self.press.take()?;
@@ -177,14 +184,14 @@ pub fn copied_on_select(change_count_now: isize, change_count_at_press: isize, m
 mod tests {
     use super::*;
 
-    const PILL: Rect = Rect { x: 100.0, y: 100.0, width: 200.0, height: 60.0 };
+    const EXCLUDE: Rect = Rect { x: 100.0, y: 100.0, width: 200.0, height: 60.0 };
 
     fn sample(at_ms: u64, left_down: bool, x: f64, y: f64) -> Sample {
-        Sample { at_ms, left_down, x, y, shift: false, arrow: false, command: false, a_key: false }
+        Sample { at_ms, left_down, x, y, shift: false, arrow: false, command: false, a_key: false, owner_key: false }
     }
 
     fn detector() -> TriggerDetector {
-        TriggerDetector { pill: PILL, ..Default::default() }
+        TriggerDetector { exclude: EXCLUDE, ..Default::default() }
     }
 
     fn drag(detector: &mut TriggerDetector, start_ms: u64, from: (f64, f64), to: (f64, f64)) -> Option<Trigger> {
@@ -255,6 +262,55 @@ mod tests {
     }
 
     #[test]
+    fn selection_press_inside_a_menu_sized_exclusion_frame_does_not_trigger_but_a_drag_outside_does() {
+        let menu = Rect { x: 0.0, y: 0.0, width: 320.0, height: 400.0 };
+        let mut d = TriggerDetector { exclude: menu, ..Default::default() };
+        assert_eq!(drag(&mut d, 0, (100.0, 100.0), (100.0, 150.0)), None);
+        assert_eq!(drag(&mut d, 1000, (500.0, 500.0), (550.0, 500.0)), Some(Trigger::Drag));
+    }
+
+    #[test]
+    fn selection_drag_outside_the_frame_while_the_owner_is_key_does_not_trigger() {
+        let mut d = detector();
+        let owner_key = |s: Sample| Sample { owner_key: true, ..s };
+        assert_eq!(d.feed(&owner_key(sample(0, true, 500.0, 500.0))), None);
+        assert_eq!(d.feed(&owner_key(sample(30, false, 550.0, 500.0))), None);
+    }
+
+    #[test]
+    fn selection_release_after_the_owner_lost_key_does_not_fire_on_the_press_made_while_it_was_key() {
+        let mut d = detector();
+        assert_eq!(d.feed(&Sample { owner_key: true, ..sample(0, true, 500.0, 500.0) }), None);
+        assert_eq!(d.feed(&sample(30, false, 550.0, 500.0)), None);
+    }
+
+    #[test]
+    fn selection_shift_arrow_while_the_owner_is_key_does_not_trigger() {
+        let mut d = detector();
+        let held = Sample { shift: true, owner_key: true, ..sample(0, false, 0.0, 0.0) };
+        assert_eq!(d.feed(&held), None);
+        assert_eq!(d.feed(&Sample { arrow: true, ..held }), None);
+        assert_eq!(d.feed(&held), None);
+        assert_eq!(d.feed(&Sample { owner_key: true, ..sample(90, false, 0.0, 0.0) }), None);
+        assert_eq!(d.feed(&sample(120, false, 0.0, 0.0)), None);
+    }
+
+    #[test]
+    fn selection_command_a_while_the_owner_is_key_does_not_trigger() {
+        let mut d = detector();
+        let chord = Sample { command: true, a_key: true, owner_key: true, ..sample(0, false, 0.0, 0.0) };
+        assert_eq!(d.feed(&chord), None);
+    }
+
+    #[test]
+    fn selection_click_while_the_owner_is_key_does_not_count_as_the_first_click_of_a_double_click() {
+        let mut d = detector();
+        assert_eq!(d.feed(&Sample { owner_key: true, ..sample(0, true, 500.0, 500.0) }), None);
+        assert_eq!(d.feed(&Sample { owner_key: true, ..sample(30, false, 500.0, 500.0) }), None);
+        assert_eq!(drag(&mut d, 300, (500.0, 500.0), (500.0, 500.0)), None);
+    }
+
+    #[test]
     fn selection_baseline_equal_keeps_waiting() {
         let read = AxSelection { element: 1, range: Some((0, 4)), text: "text".into() };
         let baseline = AxSelection { element: 1, range: Some((0, 4)), text: "text".into() };
@@ -317,6 +373,7 @@ mod tests {
 
     #[test]
     fn selection_run_token_ends_older_runs() {
+        let _runs = RUN_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let first = begin();
         assert!(is_current(first));
         cancel();

@@ -115,6 +115,7 @@ pub fn hide_host(app: &tauri::AppHandle) {
         }
     }
     crate::services::speech::composer::cancel_owned_by(app, CONVERSATION_DIALOG_LABEL);
+    crate::services::speech::capture::cancel_owned_by(CONVERSATION_DIALOG_LABEL);
     app.state::<DockManager>().host_hidden(app);
     log::info!(
         target: "app_lib::services::ai_webview",

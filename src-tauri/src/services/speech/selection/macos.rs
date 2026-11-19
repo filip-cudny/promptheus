@@ -1,5 +1,4 @@
 use std::ptr;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString, NSWorkspace};
@@ -8,10 +7,9 @@ use objc2_core_graphics::{
 };
 use objc2_foundation::NSString;
 use tauri::{AppHandle, Manager};
-use tokio::sync::Mutex;
 
 use super::{
-    copied_on_select, equals_baseline, is_current, should_restore, AxSelection, Rect, Sample, TriggerDetector,
+    copied_on_select, equals_baseline, should_restore, AxSelection, Rect, Sample, TriggerDetector,
     COPY_WAIT_MS, POLL_INTERVAL_MS, SETTLE_DELAY_MS,
 };
 use crate::services::macos_ax::{
@@ -22,9 +20,7 @@ use crate::services::notification::{NotificationLevel, NotificationService};
 use crate::services::speech::claude_desktop::macos::{
     accessibility_trusted_or_prompt, on_main, restore_pasteboard, save_pasteboard,
 };
-use crate::services::speech::screenshot::keep_capture;
-use crate::services::speech::widget::{RecordingWidget, WINDOW_LABEL};
-use crate::services::speech::SpeechService;
+use crate::services::speech::capture::{still_valid_now, Owner};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(POLL_INTERVAL_MS);
 const SETTLE_DELAY: Duration = Duration::from_millis(SETTLE_DELAY_MS);
@@ -124,7 +120,7 @@ fn pasteboard_string() -> Option<String> {
         .map(|text| text.to_string())
 }
 
-fn read_sample(started: Instant) -> Option<Sample> {
+fn read_sample(started: Instant, owner_key: bool) -> Option<Sample> {
     let source = CGEventSourceStateID::CombinedSessionState;
     let flags = CGEventSource::flags_state(source);
     let pointer = CGEvent::location(Some(&*CGEvent::new(None)?));
@@ -137,35 +133,27 @@ fn read_sample(started: Instant) -> Option<Sample> {
         arrow: ARROW_KEYS.iter().any(|key| CGEventSource::key_state(source, *key)),
         command: flags.contains(CGEventFlags::MaskCommand),
         a_key: CGEventSource::key_state(source, KEY_A),
+        owner_key,
     })
 }
 
-fn pill_frame(app: &AppHandle) -> Rect {
-    let frame = app.get_webview_window(WINDOW_LABEL).and_then(|window| {
-        let scale = window.scale_factor().ok()?;
-        let position = window.outer_position().ok()?;
-        let size = window.outer_size().ok()?;
-        Some(Rect {
-            x: position.x as f64 / scale,
-            y: position.y as f64 / scale,
-            width: size.width as f64 / scale,
-            height: size.height as f64 / scale,
-        })
-    });
-    frame.unwrap_or_default()
+fn owner_frame(app: &AppHandle, label: &str) -> Option<(Rect, bool)> {
+    let window = app.get_window(label)?;
+    let scale = window.scale_factor().ok()?;
+    let position = window.outer_position().ok()?;
+    let size = window.outer_size().ok()?;
+    let frame = Rect {
+        x: position.x as f64 / scale,
+        y: position.y as f64 / scale,
+        width: size.width as f64 / scale,
+        height: size.height as f64 / scale,
+    };
+    Some((frame, window.is_focused().unwrap_or(false)))
 }
 
-async fn keep_running(app: &AppHandle, generation: u64, run: u64) -> bool {
-    if !is_current(run) {
-        return false;
-    }
-    let current = app
-        .state::<RecordingWidget>()
-        .shown_generation()
-        .await
-        .map(|(_, generation)| generation);
-    let locked = app.state::<Arc<Mutex<SpeechService>>>().lock().await.target_locked();
-    keep_capture(generation, current, locked)
+fn owner_frame_and_key(app: &AppHandle, owner: &Owner) -> (Rect, bool) {
+    let (frame, focused) = owner_frame(app, owner.label()).unwrap_or_default();
+    (frame, focused && matches!(owner, Owner::Window(_)))
 }
 
 async fn warn_permission_missing(app: &AppHandle) {
@@ -194,7 +182,7 @@ async fn wait_for_pasteboard_change(app: &AppHandle, before: isize) -> Option<is
     }
 }
 
-async fn copy_fallback(app: &AppHandle, generation: u64, run: u64) -> Option<String> {
+async fn copy_fallback(app: &AppHandle, owner: &Owner, run: u64) -> Option<String> {
     let started = Instant::now();
     let item = match tauri::async_runtime::spawn_blocking(frontmost_copy_item).await.ok()? {
         CopyItem::Disabled => {
@@ -204,7 +192,7 @@ async fn copy_fallback(app: &AppHandle, generation: u64, run: u64) -> Option<Str
         CopyItem::Missing => None,
         CopyItem::Enabled(item) => Some(item),
     };
-    if !keep_running(app, generation, run).await {
+    if !still_valid_now(app, owner, run).await {
         return None;
     }
     let (saved, before) = on_main(app, || (save_pasteboard(), change_count())).await.ok()?;
@@ -240,10 +228,10 @@ async fn copy_fallback(app: &AppHandle, generation: u64, run: u64) -> Option<Str
     text
 }
 
-// A pasteboard change between the left press that started a drag or multi-click outside the pill and
+// A pasteboard change between the left press that started a drag or multi-click outside the owner window and
 // the `changeCount` read in `read_after_trigger` right after the settle delay, with that read at most
 // GESTURE_WINDOW_MS after the release, counts as the frontmost app's copy-on-select. The read comes before
-// the AX read and `keep_running`, whose waits would otherwise push it past the window.
+// the AX read and `still_valid_now`, whose waits would otherwise push it past the window.
 // Wrong when a write that is not the selection lands in that window (a skill result or webview-send
 // fallback written by this app, a background write by another app) and the frontmost app gives no AX
 // selection: that content is taken as the selection. Upgrade path: record the `changeCount` each of this
@@ -260,7 +248,7 @@ async fn copy_on_select_text(app: &AppHandle) -> Option<String> {
 
 async fn read_after_trigger(
     app: &AppHandle,
-    generation: u64,
+    owner: &Owner,
     run: u64,
     baseline: &mut Option<AxSelection<Cf>>,
     pointer_gesture: Option<(isize, Instant)>,
@@ -284,7 +272,7 @@ async fn read_after_trigger(
         log::debug!("selection capture: AX path, length={}", read.text.len());
         return Some(read.text);
     }
-    if !keep_running(app, generation, run).await {
+    if !still_valid_now(app, owner, run).await {
         return None;
     }
     if copied {
@@ -292,10 +280,10 @@ async fn read_after_trigger(
             return Some(text);
         }
     }
-    copy_fallback(app, generation, run).await
+    copy_fallback(app, owner, run).await
 }
 
-pub async fn capture(app: &AppHandle, generation: u64, run: u64) -> Option<String> {
+pub async fn capture(app: &AppHandle, owner: &Owner, run: u64) -> Option<String> {
     if !accessibility_trusted_or_prompt() {
         warn_permission_missing(app).await;
         return None;
@@ -305,21 +293,22 @@ pub async fn capture(app: &AppHandle, generation: u64, run: u64) -> Option<Strin
     let started = Instant::now();
     let mut detector = TriggerDetector::default();
     loop {
-        if !keep_running(app, generation, run).await {
+        if !still_valid_now(app, owner, run).await {
             log::debug!("selection capture stopped after {} ms", started.elapsed().as_millis());
             return None;
         }
-        if let Some(sample) = read_sample(started) {
+        let (frame, owner_key) = owner_frame_and_key(app, owner);
+        if let Some(sample) = read_sample(started, owner_key) {
             if detector.is_press(&sample) {
                 change_count_at_press = Some(on_main(app, change_count).await.ok()?);
             }
-            detector.pill = pill_frame(app);
+            detector.exclude = frame;
             if let Some(trigger) = detector.feed(&sample) {
                 log::debug!("selection capture: trigger {}", trigger.name());
                 let pointer_gesture = change_count_at_press
                     .filter(|_| trigger.is_pointer())
                     .map(|count| (count, Instant::now()));
-                let read = read_after_trigger(app, generation, run, &mut baseline, pointer_gesture).await;
+                let read = read_after_trigger(app, owner, run, &mut baseline, pointer_gesture).await;
                 if let Some(text) = read {
                     return Some(text);
                 }

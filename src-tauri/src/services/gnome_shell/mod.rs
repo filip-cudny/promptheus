@@ -25,9 +25,11 @@ pub trait Shell {
 
     fn watch_app_titles(&self, wm_class: &str, duration_ms: u32) -> zbus::Result<()>;
 
-    fn capture_area(&self, path: &str) -> zbus::Result<String>;
+    fn capture_area(&self, path: &str, owner: &str) -> zbus::Result<String>;
 
-    fn capture_selection(&self) -> zbus::Result<(String, String)>;
+    fn capture_selection(&self, owner: &str) -> zbus::Result<(String, String)>;
+
+    fn cancel_capture(&self, owner: &str) -> zbus::Result<bool>;
 
     fn show_toast(
         &self,

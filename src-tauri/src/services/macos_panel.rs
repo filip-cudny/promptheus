@@ -104,9 +104,12 @@ fn reclass_as_nonactivating_panel(
 }
 
 // Convert a webview window's underlying NSWindow into a non-activating NSPanel
-// so that showing the panel does not raise the app's other windows.
+// so that showing the panel does not raise the app's other windows. It stays
+// visible when the app deactivates, so a click into another app (Select text)
+// does not hide the context menu.
 pub fn make_nonactivating_panel(window: &tauri::WebviewWindow) -> Result<(), String> {
     let panel = reclass_as_nonactivating_panel(window, promptheus_panel_class())?;
+    panel.setHidesOnDeactivate(false);
     panel.setBecomesKeyOnlyIfNeeded(false);
     panel.setFloatingPanel(true);
     Ok(())

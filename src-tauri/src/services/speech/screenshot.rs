@@ -24,8 +24,8 @@ pub fn read_and_delete(path: &Path, read: bool) -> Option<Vec<u8>> {
 }
 
 #[cfg(target_os = "linux")]
-pub async fn capture_gnome(path: &str) -> bool {
-    let reply = async { crate::services::gnome_shell::proxy().await?.capture_area(path).await }.await;
+pub async fn capture_gnome(path: &str, owner_title: &str) -> bool {
+    let reply = async { crate::services::gnome_shell::proxy().await?.capture_area(path, owner_title).await }.await;
     match reply {
         Ok(outcome) if outcome == "captured" => true,
         Ok(outcome) => {
@@ -45,7 +45,9 @@ mod macos {
 
     use tauri::{AppHandle, Manager};
 
+    use crate::services::dialog::{focus_host_window, CONVERSATION_DIALOG_LABEL};
     use crate::services::notification::{NotificationLevel, NotificationService};
+    use crate::services::speech::capture::{Owner, WindowOwner};
     use crate::services::speech::widget::RecordingWidget;
 
     #[link(name = "CoreGraphics", kind = "framework")]
@@ -67,15 +69,78 @@ mod macos {
         .await;
     }
 
-    pub async fn capture(app: &AppHandle, generation: u64, path: &Path) -> bool {
+    async fn hide_owner(app: &AppHandle, owner: &Owner) -> bool {
+        match owner {
+            Owner::Pill { generation, .. } => app.state::<RecordingWidget>().hide_for_capture(app, *generation).await,
+            Owner::Window(WindowOwner::ContextMenu) => {
+                match crate::commands::menu::hide_context_menu_panel(app.clone(), true).await {
+                    Ok(()) => true,
+                    Err(e) => {
+                        log::warn!("hiding the context menu for a capture failed: {e}");
+                        false
+                    }
+                }
+            }
+            Owner::Window(WindowOwner::Chat) => {
+                let Some(host) = app.get_window(CONVERSATION_DIALOG_LABEL) else {
+                    log::warn!("hiding the chat for a capture failed: window not found");
+                    return false;
+                };
+                host.hide()
+                    .map_err(|e| log::warn!("hiding the chat for a capture failed: {e}"))
+                    .is_ok()
+            }
+        }
+    }
+
+    async fn hide_pill_beside_window_owner(app: &AppHandle, owner: &Owner) -> Option<u64> {
+        if !matches!(owner, Owner::Window(_)) {
+            return None;
+        }
+        let widget = app.state::<RecordingWidget>();
+        let (_, generation) = widget.shown_generation().await?;
+        widget.hide_for_capture(app, generation).await.then_some(generation)
+    }
+
+    async fn restore_owner(app: &AppHandle, owner: &Owner) {
+        match owner {
+            Owner::Pill { generation, .. } => {
+                app.state::<RecordingWidget>().restore_after_capture(app, *generation).await;
+            }
+            Owner::Window(WindowOwner::ContextMenu) => {
+                if let Err(e) = crate::commands::menu::show_context_menu_panel(app.clone()).await {
+                    log::warn!("showing the context menu after a capture failed: {e}");
+                    return;
+                }
+                if let Err(e) = crate::commands::menu::focus_context_menu(app.clone()).await {
+                    log::warn!("focusing the context menu after a capture failed: {e}");
+                }
+            }
+            Owner::Window(WindowOwner::Chat) => {
+                let Some(host) = app.get_window(CONVERSATION_DIALOG_LABEL) else {
+                    log::warn!("showing the chat after a capture failed: window not found");
+                    return;
+                };
+                if let Err(e) = host.show() {
+                    log::warn!("showing the chat after a capture failed: {e}");
+                    return;
+                }
+                if let Err(e) = focus_host_window(app, CONVERSATION_DIALOG_LABEL) {
+                    log::warn!("focusing the chat after a capture failed: {e}");
+                }
+            }
+        }
+    }
+
+    pub async fn capture(app: &AppHandle, owner: &Owner, path: &Path) -> bool {
         if !unsafe { CGPreflightScreenCaptureAccess() } {
             warn_permission_missing(app).await;
             return false;
         }
-        let widget = app.state::<RecordingWidget>();
-        if !widget.hide_for_capture(app, generation).await {
+        if !hide_owner(app, owner).await {
             return false;
         }
+        let hidden_pill = hide_pill_beside_window_owner(app, owner).await;
         let target = path.to_path_buf();
         let status = tauri::async_runtime::spawn_blocking(move || {
             std::process::Command::new("/usr/sbin/screencapture")
@@ -84,7 +149,10 @@ mod macos {
                 .status()
         })
         .await;
-        widget.restore_after_capture(app, generation).await;
+        if let Some(generation) = hidden_pill {
+            app.state::<RecordingWidget>().restore_after_capture(app, generation).await;
+        }
+        restore_owner(app, owner).await;
         match status {
             Ok(Ok(status)) => log::debug!("screencapture exited: {status}"),
             Ok(Err(e)) => log::warn!("starting screencapture failed: {e}"),

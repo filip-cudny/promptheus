@@ -9,6 +9,7 @@ use crate::commands::settings::apply_settings_reload;
 use crate::models::speech::AudioClipInfo;
 use crate::services::config::{ConfigService, KeytermsDoc};
 use crate::models::speech::DictationBusy;
+use crate::services::speech::capture::{self, Owner, WindowOwner};
 use crate::services::speech::composer::{self, AppEffects};
 use crate::services::speech::{session, AudioClipStore, ComposerOwner, SpeechError, SpeechService};
 use crate::services::sqlite_history::SqliteHistoryService;
@@ -99,6 +100,44 @@ pub async fn capture_selection_into_recording_widget(app: AppHandle) -> crate::R
 #[tauri::command]
 pub fn cancel_recording_widget_selection() {
     session::cancel_recording_widget_selection();
+}
+
+fn window_owner(owner: &str) -> crate::Result<WindowOwner> {
+    WindowOwner::from_label(owner).ok_or_else(|| Error::Other(format!("unknown capture owner: {owner}")))
+}
+
+#[tauri::command]
+pub fn capture_available() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        true
+    }
+    #[cfg(target_os = "linux")]
+    {
+        crate::services::gnome_shell::is_gnome_wayland()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        false
+    }
+}
+
+#[tauri::command]
+pub async fn capture_screenshot_for_window(app: AppHandle, owner: String) -> crate::Result<Option<String>> {
+    let owner = Owner::Window(window_owner(&owner)?);
+    Ok(capture::screenshot(&app, &owner).await?.map(capture::png_base64))
+}
+
+#[tauri::command]
+pub async fn capture_selection_for_window(app: AppHandle, owner: String) -> crate::Result<Option<String>> {
+    let owner = Owner::Window(window_owner(&owner)?);
+    Ok(capture::selection(&app, &owner).await)
+}
+
+#[tauri::command]
+pub async fn cancel_window_capture(owner: String) -> crate::Result<()> {
+    capture::cancel_owned_by(window_owner(&owner)?.label());
+    Ok(())
 }
 
 fn composer_owner(webview: &Webview, tab_id: Option<String>) -> crate::Result<ComposerOwner> {

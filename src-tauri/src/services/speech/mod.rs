@@ -1,4 +1,5 @@
 mod clip_store;
+pub mod capture;
 pub mod claude_desktop;
 pub mod composer;
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]

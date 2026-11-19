@@ -19,8 +19,9 @@ use crate::services::execution::skill_executor::run_skill_stream;
 use crate::services::notification::{NotificationLevel, NotificationService};
 use crate::services::skill::SkillService;
 use crate::services::speech::widget::{
-    configured_claude_target, configured_providers, configured_stop_chat_target, pill_targets, RecordingWidget, Transport,
+    configured_claude_target, configured_providers, configured_stop_chat_target, pill_targets, RecordingWidget,
 };
+use crate::services::speech::capture::{self, Owner};
 use crate::services::speech::{
     self, claude_desktop, composer, screenshot, selection, webview_provider_of, AudioClipStore, PendingOrigin, PendingPrompt, SpeechError,
     SpeechService, SttOptions,
@@ -1296,8 +1297,6 @@ pub async fn paste_into_recording_widget(app: AppHandle) -> crate::Result<()> {
 }
 
 pub async fn capture_screenshot_into_recording_widget(app: AppHandle) -> crate::Result<()> {
-    use base64::Engine;
-
     log::debug!("recording widget intent: screenshot");
     let widget = app.state::<RecordingWidget>();
     let Some((transport, generation)) = widget.shown_generation().await else {
@@ -1309,42 +1308,13 @@ pub async fn capture_screenshot_into_recording_widget(app: AppHandle) -> crate::
         return Ok(());
     }
 
-    let dir = app.path().app_cache_dir()?.join(screenshot::DIR_NAME);
-    let path = dir.join(format!("{}.png", uuid::Uuid::new_v4()));
-    tauri::async_runtime::spawn_blocking(move || std::fs::create_dir_all(dir)).await??;
-    log::debug!("screenshot file: {}", path.display());
-
-    let captured = match transport {
-        #[cfg(target_os = "linux")]
-        Transport::Shell => {
-            let path = path
-                .to_str()
-                .ok_or_else(|| Error::Other("screenshot path is not valid UTF-8".into()))?;
-            screenshot::capture_gnome(path).await
-        }
-        #[cfg(target_os = "macos")]
-        Transport::Window => screenshot::capture_macos(&app, generation, &path).await,
-        #[cfg(not(target_os = "macos"))]
-        Transport::Window => {
-            log::debug!("screenshot unsupported on this session");
-            return Ok(());
-        }
-    };
-
-    let bytes = tauri::async_runtime::spawn_blocking(move || screenshot::read_and_delete(&path, captured)).await?;
-    let current_generation = widget.shown_generation().await.map(|(_, generation)| generation);
-    if !screenshot::keep_capture(generation, current_generation, target_locked(&app).await) {
-        log::debug!("screenshot dropped: pill changed");
-        return Ok(());
-    }
-    let Some(bytes) = bytes else {
+    let Some(bytes) = capture::screenshot(&app, &Owner::Pill { transport, generation }).await? else {
         return Ok(());
     };
-    let data = base64::engine::general_purpose::STANDARD.encode(bytes);
     app.state::<Arc<Mutex<ContextManagerService>>>()
         .lock()
         .await
-        .append_item(PastedItem::Image(data, "image/png".into()));
+        .append_item(PastedItem::Image(capture::png_base64(bytes), "image/png".into()));
     crate::commands::context::emit_context_changed(&app)
 }
 
@@ -1360,27 +1330,9 @@ pub async fn capture_selection_into_recording_widget(app: AppHandle) -> crate::R
         return Ok(());
     }
 
-    let text = match transport {
-        #[cfg(target_os = "linux")]
-        Transport::Shell => selection::capture_gnome().await,
-        #[cfg(target_os = "macos")]
-        Transport::Window => selection::capture_macos(&app, generation, selection::begin()).await,
-        #[cfg(not(target_os = "macos"))]
-        Transport::Window => {
-            log::debug!("select text unsupported on this session");
-            return Ok(());
-        }
-    };
-
-    let current_generation = widget.shown_generation().await.map(|(_, generation)| generation);
-    if !screenshot::keep_capture(generation, current_generation, target_locked(&app).await) {
-        log::debug!("selection dropped: pill changed");
-        return Ok(());
-    }
-    let Some(text) = text.filter(|text| !text.is_empty()) else {
+    let Some(text) = capture::selection(&app, &Owner::Pill { transport, generation }).await else {
         return Ok(());
     };
-    log::debug!("selection captured: {} chars", text.chars().count());
     app.state::<Arc<Mutex<ContextManagerService>>>()
         .lock()
         .await
@@ -1393,7 +1345,7 @@ pub fn cancel_recording_widget_selection() {
     selection::cancel();
 }
 
-async fn target_locked(app: &AppHandle) -> bool {
+pub(super) async fn target_locked(app: &AppHandle) -> bool {
     app.state::<Arc<Mutex<SpeechService>>>().lock().await.target_locked()
 }
 
