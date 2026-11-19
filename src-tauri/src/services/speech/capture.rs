@@ -82,13 +82,16 @@ fn owned_title<'a>(record: Option<&'a Record>, label: &str, is_current: impl Fn(
 pub fn cancel_owned_by(label: &str) {
     let title = {
         let current = lock_current();
-        owned_title(current.as_ref(), label, selection::is_current).map(str::to_string)
+        let title = owned_title(current.as_ref(), label, selection::is_current).map(str::to_string);
+        if title.is_some() {
+            selection::cancel();
+        }
+        title
     };
     let Some(title) = title else {
         return;
     };
     log::debug!("capture cancelled: owner window {label}");
-    selection::cancel();
     cancel_in_shell(title);
 }
 
