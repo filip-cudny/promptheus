@@ -3,6 +3,7 @@ import { SvelteMap } from "svelte/reactivity";
 import { error as logError } from "@tauri-apps/plugin-log";
 import { insertText } from "$lib/utils/insertText";
 import { generateId } from "$lib/utils/id";
+import { addCaptured, type CapturedInput } from "$lib/stores/captureInput";
 import { COPY_FEEDBACK_MS } from "$lib/utils/copyFeedback.svelte";
 import {
   cancelLiveExecution,
@@ -1250,6 +1251,10 @@ export function createConversationStore(
     if (tab) tab.input_text_attachments = attachments;
   }
 
+  function addCapturedInput(tabId: string, captured: CapturedInput): boolean {
+    return addCaptured(getTab(tabId), captured);
+  }
+
   function updateModelId(id: string | null): void {
     const tab = getTab(activeTabId);
     if (!tab) return;
@@ -1609,6 +1614,7 @@ export function createConversationStore(
     insertInputText,
     updateInputImages,
     updateInputTextAttachments,
+    addCapturedInput,
     updateModelId,
     updateReasoningEffort,
     toggleTool,

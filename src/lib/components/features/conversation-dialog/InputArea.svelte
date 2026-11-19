@@ -8,6 +8,7 @@
   import { useComposerDictation } from "$lib/components/shared/widgets/useComposerDictation.svelte";
   import ToolChip from "./ToolChip.svelte";
   import AttachmentRow from "./components/AttachmentRow.svelte";
+  import ComposerCaptureBar from "./components/ComposerCaptureBar.svelte";
   import { prefetchCapabilities, getCachedCapabilities } from "$lib/stores/capabilities.svelte";
   import { ArrowUp, RefreshCw, Square, CopyCheck, Globe, Mic } from "lucide-svelte";
   import type { ComponentType, SvelteComponent } from "svelte";
@@ -17,7 +18,14 @@
   import { handleEditablePaste } from "$lib/utils/paste";
   import { formatTokenCount } from "$lib/utils/contextWindow";
   import { focusConversationInput, setConversationInputFocus } from "$lib/utils/conversationFocus";
+  import { debug as logDebug, error as logError } from "@tauri-apps/plugin-log";
   import type { createConversationStore } from "$lib/stores/conversation.svelte";
+  import type { CapturedInput } from "$lib/stores/captureInput";
+  import {
+    captureScreenshotForWindow,
+    captureSelectionForWindow,
+    cancelWindowCapture,
+  } from "$lib/services/capture";
   import type { ConversationImage } from "$lib/types/conversation";
   import type { ModelConfig } from "$lib/types";
   import { openImagePreview, openTextPreview } from "$lib/services/windowPreviews";
@@ -60,6 +68,8 @@
   let unlistenMcp: (() => void) | undefined;
   let unlistenAttachmentBridge: (() => void) | undefined;
   let shiftHeld = $state(false);
+  let selecting = $state<{ id: number; tabId: string } | null>(null);
+  let captureCounter = 0;
 
   const activeModel = $derived.by(() => {
     const activeModelId = store.modelId ?? defaultModelId;
@@ -155,6 +165,7 @@
 
   onDestroy(() => {
     setConversationInputFocus(null);
+    if (selecting) cancelWindowCapture("conversation-dialog").catch(logCaptureError);
     unlistenAttachmentBridge?.();
     unlistenMcp?.();
     window.removeEventListener("keydown", onKeyDown);
@@ -175,6 +186,43 @@
   function startDictation() {
     const caret = skillEditable?.getSelection() ?? { start: sync.localText.length, end: sync.localText.length };
     dictation.start(store.activeTabId, caret);
+  }
+
+  function logCaptureError(e: unknown) {
+    logError("chat capture failed: " + e);
+  }
+
+  function deliverCaptured(tabId: string, captured: CapturedInput) {
+    if (!store.addCapturedInput(tabId, captured)) logDebug("chat capture dropped: its tab is closed");
+  }
+
+  async function captureScreenArea() {
+    const tabId = store.activeTabId;
+    try {
+      const data = await captureScreenshotForWindow("conversation-dialog");
+      if (data) deliverCaptured(tabId, { kind: "image", image: { data, media_type: "image/png" } });
+    } catch (e) {
+      logCaptureError(e);
+    }
+  }
+
+  async function captureSelectedText() {
+    const id = ++captureCounter;
+    const tabId = store.activeTabId;
+    selecting = { id, tabId };
+    try {
+      const text = await captureSelectionForWindow("conversation-dialog");
+      if (text) deliverCaptured(tabId, { kind: "text", text });
+    } catch (e) {
+      logCaptureError(e);
+    } finally {
+      if (selecting?.id === id) selecting = null;
+    }
+  }
+
+  function cancelSelecting() {
+    selecting = null;
+    cancelWindowCapture("conversation-dialog").catch(logCaptureError);
   }
 
   function sendOrRegenerate() {
@@ -266,10 +314,14 @@
   <div class="button-bar">
     {#if dictation.active}
       <ComposerDictationBar {dictation} />
+    {:else if selecting}
+      <ComposerCaptureBar onCancel={cancelSelecting} />
     {:else}
       <div class="bar-left">
         <AttachMenu
           onSelectContext={onToggleContext}
+          onScreenArea={captureScreenArea}
+          onSelectedText={captureSelectedText}
           {contextDisabled}
           {availableTools}
           onToggleTool={handleToggleTool}
