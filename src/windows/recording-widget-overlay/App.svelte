@@ -179,7 +179,7 @@
       class="dropdown"
       class:mac={isMac}
       style:height="{dropdownHeight}px"
-      style:padding="{DROPDOWN_PADDING}px 0"
+      style:padding="{DROPDOWN_PADDING}px 1px"
       style:--row-radius="{RADIUS - DROPDOWN_PADDING}px"
     >
       {#each model.targets as target, index (target.id)}
@@ -265,6 +265,7 @@
     flex-direction: column;
     border-radius: var(--radius);
     background: #1c1c1e;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
     color: #e5e5e7;
     font-size: 13px;
   }

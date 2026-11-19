@@ -1873,9 +1873,10 @@ export default class PromptheusExtension extends Extension {
             vertical: true,
             reactive: true,
             can_focus: false,
-            style: `padding: ${WIDGET_DROPDOWN_PADDING}px 0; border-radius: ${WIDGET_RADIUS}px; ` +
+            style: `padding: ${WIDGET_DROPDOWN_PADDING}px 1px; border-radius: ${WIDGET_RADIUS}px; ` +
                 'background-color: rgba(28,28,30,0.92); color: #e5e5e7; ' +
-                'font-family: "Inter", "Noto Sans", sans-serif; font-size: 13px;',
+                'font-family: "Inter", "Noto Sans", sans-serif; font-size: 13px; ' +
+                'box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);',
         });
         dropdown.set_size(WIDGET_WIDTH, height);
         const rowRadius = WIDGET_RADIUS - WIDGET_DROPDOWN_PADDING;
