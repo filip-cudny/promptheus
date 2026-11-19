@@ -64,10 +64,11 @@ pub struct ClipboardService {
 }
 
 impl ClipboardService {
-    pub fn new(app: AppHandle) -> Result<Self, ClipboardError> {
-        arboard::Clipboard::new()
-            .map_err(|e| ClipboardError::Access(e.to_string()))?;
-        Ok(Self { app: Some(app) })
+    pub fn new(app: AppHandle) -> Self {
+        if let Err(e) = arboard::Clipboard::new() {
+            log::warn!("clipboard unavailable at startup: {e}");
+        }
+        Self { app: Some(app) }
     }
 
     pub fn get_text(&self) -> Result<String, ClipboardError> {
