@@ -96,8 +96,8 @@ Renders when `item.item_type === "context"`. Extracts `ContextItem[]` from `item
 | Element | Description |
 |---------|-------------|
 | Section header | `SectionHeader` (`components/`): "Context" label + item count badge (when not empty), action buttons in its `actions` snippet |
-| Text chip | `ContextItemChip` (form E2): `Type` icon, `#n`, text ellipsized by CSS on one line, `title` = full content, `X` removes. Click copies the content; the `Type` icon shows `Check` for 1200 ms (`useCopyFeedback`) |
-| Image chip | `ContextItemChip`: 16 px thumbnail, `#n`, `X` removes. Click opens the preview (`onOpenImagePreview`). Image chips come first, then text chips, each group in context order; `onRemoveItem` and the copy feedback use the item's index in `items` (context position), not its position on screen |
+| Text chip | `ContextItemChip` (form E2, K1 look as in `shared/ui/DOCS.md` → `ContextItemChip`): `Type` icon, `#n`, text ellipsized by CSS on one line, `title` = full content, `X` removes. Click copies the content; the `Type` icon shows `Check` for 1200 ms (`useCopyFeedback`) |
+| Image chip | `ContextItemChip` (K1 look as in `shared/ui/DOCS.md` → `ContextItemChip`): 16 px thumbnail, `#n`, `X` removes. Click opens the preview (`onOpenImagePreview`). Image chips come first, then text chips, each group in context order; `onRemoveItem` and the copy feedback use the item's index in `items` (context position), not its position on screen |
 | Replace button | Replaces context with clipboard content via `setContextFromClipboard()` |
 | Append button | Appends clipboard content to context via `appendContextFromClipboard()` |
 | Edit button | Opens the context editor window via `openContextEditor` (`$lib/services/contextEditor`) |
