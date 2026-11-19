@@ -464,17 +464,16 @@
 </script>
 
 {#snippet removeButton(item: PillItem)}
-  {#if !model.targetLocked}
-    <button
-      type="button"
-      class="chip-remove"
-      tabindex="-1"
-      aria-label="Remove {item.label}"
-      onclick={() => run("remove_recording_widget_item", { index: item.index, contextVersion: model.contextVersion })}
-    >
-      <X size={12} />
-    </button>
-  {/if}
+  <button
+    type="button"
+    class="chip-remove"
+    tabindex="-1"
+    aria-label="Remove {item.label}"
+    disabled={model.targetLocked}
+    onclick={() => run("remove_recording_widget_item", { index: item.index, contextVersion: model.contextVersion })}
+  >
+    <X size={12} />
+  </button>
 {/snippet}
 
 <div class="root" class:up={overlayUp} style:--radius="{RADIUS}px">
@@ -817,7 +816,7 @@
     height: 24px;
     min-width: 0;
     padding: 0 6px;
-    border-radius: 12px;
+    border-radius: var(--radius-chip);
     background: rgba(255, 255, 255, 0.12);
     font-size: 11px;
     white-space: nowrap;
@@ -869,6 +868,11 @@
     flex: none;
     width: 16px;
     height: 16px;
+  }
+
+  .chip-remove:disabled {
+    opacity: 0.35;
+    pointer-events: none;
   }
 
   .target {

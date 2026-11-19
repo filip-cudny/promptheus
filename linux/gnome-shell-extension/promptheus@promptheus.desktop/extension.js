@@ -32,6 +32,8 @@ const WIDGET_HEIGHT = 72;
 const WIDGET_ROW_HEIGHT = WIDGET_HEIGHT / 2;
 const WIDGET_RADIUS = 16;
 const WIDGET_ITEM_ROW_HEIGHT = 24;
+const WIDGET_CHIP_RADIUS = 7;
+const WIDGET_CHIP_REMOVE_LOCKED_OPACITY = 89;
 const WIDGET_ITEM_ROW_GAP = 4;
 const WIDGET_ITEMS_ROW_PADDING = 10;
 const WIDGET_PADDING_X = 14;
@@ -1576,7 +1578,7 @@ export default class PromptheusExtension extends Extension {
         widget.itemsRow.style = `height: ${widgetItemsContentHeight(itemRows)}px; padding: ${WIDGET_ITEMS_ROW_PADDING / 2}px ${WIDGET_PADDING_X}px;`;
         const grid = new St.BoxLayout({vertical: true, style: `spacing: ${WIDGET_ITEM_ROW_GAP}px;`});
         const chipFor = ([index, kind, label, preview, imagePath]) => this._widgetChip(widget, kind, label, preview, imagePath,
-            locked ? null : () => this._emitRecordingWidgetItemRemoved(index, version));
+            () => this._emitRecordingWidgetItemRemoved(index, version), locked);
         const images = items.filter(item => item[1] === 'image');
         const texts = items.filter(item => item[1] === 'text');
         for (let start = 0; start < images.length; start += WIDGET_IMAGE_COLUMNS) {
@@ -1600,7 +1602,7 @@ export default class PromptheusExtension extends Extension {
         widget.itemsRow.add_child(scroll);
     }
 
-    _widgetChip(widget, kind, label, text, imagePath, onRemove) {
+    _widgetChip(widget, kind, label, text, imagePath, onRemove, locked) {
         const isImage = kind === 'image';
         const paddingLeft = isImage ? WIDGET_IMAGE_CHIP_PADDING_LEFT : WIDGET_CHIP_PADDING_LEFT;
         const paddingRight = isImage ? WIDGET_IMAGE_CHIP_PADDING_RIGHT : WIDGET_CHIP_PADDING_RIGHT;
@@ -1611,7 +1613,7 @@ export default class PromptheusExtension extends Extension {
             track_hover: true,
             y_align: Clutter.ActorAlign.CENTER,
             style: `${width}height: ${WIDGET_ITEM_ROW_HEIGHT}px; padding: 0 ${paddingRight}px 0 ${paddingLeft}px; ` +
-                `spacing: ${spacing}px; border-radius: ${WIDGET_ITEM_ROW_HEIGHT / 2}px; background-color: rgba(255,255,255,0.12); font-size: 11px;`,
+                `spacing: ${spacing}px; border-radius: ${WIDGET_CHIP_RADIUS}px; background-color: rgba(255,255,255,0.12); font-size: 11px;`,
         });
         chip.isWidgetChip = true;
         chip.add_child(isImage && imagePath ? this._widgetThumb(imagePath) : this._widgetIcon(`item-${kind}`, 12));
@@ -1632,10 +1634,14 @@ export default class PromptheusExtension extends Extension {
             textActor.clutter_text.ellipsize = Pango.EllipsizeMode.END;
             chip.add_child(textActor);
         }
-        if (onRemove) {
-            chip.add_child(this._widgetButton(`Remove ${label}`, this._widgetIcon('item-remove', 12), onRemove,
-                'width: 16px; height: 16px; border-radius: 8px;'));
+        const removeButton = this._widgetButton(`Remove ${label}`, this._widgetIcon('item-remove', 12), onRemove,
+            'width: 16px; height: 16px; border-radius: 8px;');
+        if (locked) {
+            removeButton.reactive = false;
+            removeButton.track_hover = false;
+            removeButton.opacity = WIDGET_CHIP_REMOVE_LOCKED_OPACITY;
         }
+        chip.add_child(removeButton);
         chip.connect('notify::hover', () => {
             if (chip.hover)
                 this._schedulePreview(widget, chip, text, imagePath);
