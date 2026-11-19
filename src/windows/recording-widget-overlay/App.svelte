@@ -45,7 +45,7 @@
     contextVersion: 0,
     stopChatDestination: "",
   });
-  let descriptor = $state<OverlayDescriptor | null>(null);
+  let descriptor = $state.raw<OverlayDescriptor | null>(null);
   let previewContent = $state<PreviewContent | null>(null);
   let previewElement = $state<HTMLElement>();
   let imageElement = $state<HTMLImageElement>();
