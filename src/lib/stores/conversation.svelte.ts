@@ -302,6 +302,7 @@ export function createConversationStore(
 
   let globalContext = $state<ContextValue>({ text: "", images: [] });
   let globalVersion = 0;
+  let savingTabId: string | null = null;
 
   const firstTab = createTabState();
   let tabs = $state<TabState[]>([firstTab]);
@@ -965,7 +966,7 @@ export function createConversationStore(
     if (!acceptsGlobalResult(globalVersion, version)) return;
     globalVersion = version;
     globalContext = value;
-    applyGlobalChange(tabs, value);
+    applyGlobalChange(tabsOutsideSave(), value);
   }
 
   async function refreshGlobalContext(): Promise<void> {
@@ -973,7 +974,11 @@ export function createConversationStore(
     const value = await getGlobalContext();
     if (!acceptsGlobalResult(globalVersion, version)) return;
     globalContext = value;
-    syncFollowingTabs(tabs, value);
+    syncFollowingTabs(tabsOutsideSave(), value);
+  }
+
+  function tabsOutsideSave(): TabState[] {
+    return tabs.filter(t => t.tab_id !== savingTabId);
   }
 
   async function initGlobalContext(): Promise<void> {
@@ -1012,13 +1017,20 @@ export function createConversationStore(
   async function saveActiveContextAsGlobal(): Promise<void> {
     const tab = getTab(activeTabId);
     if (!tab) return;
-    await clearContext();
-    for (const img of tab.context_images) {
-      await appendContextImage(img.data, img.media_type);
-    }
-    const savedText = unwrapContextBlocks(tab.context_text);
-    if (savedText.trim()) {
-      await appendContext(savedText);
+    const images = tab.context_images.map(image => ({ ...image }));
+    const text = tab.context_text;
+    savingTabId = tab.tab_id;
+    try {
+      await clearContext();
+      for (const img of images) {
+        await appendContextImage(img.data, img.media_type);
+      }
+      const savedText = unwrapContextBlocks(text);
+      if (savedText.trim()) {
+        await appendContext(savedText);
+      }
+    } finally {
+      savingTabId = null;
     }
     followGlobal(tab, globalContext);
     await refreshGlobalContext();
