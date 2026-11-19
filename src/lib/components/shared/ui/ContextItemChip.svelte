@@ -79,10 +79,10 @@
     flex: 0 0 auto;
     min-width: 0;
     height: 20px;
-    padding: 0 7px 0 2px;
+    padding: 0 7px 0 1px;
     gap: 5px;
     border: 1px solid transparent;
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-chip);
     background: var(--accent-bg-soft);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
@@ -119,7 +119,7 @@
     height: 16px;
     flex: none;
     object-fit: cover;
-    border-radius: var(--radius-md);
+    border-radius: 5px;
   }
 
   .chip-icon {

@@ -32,7 +32,7 @@
     padding: var(--space-1) var(--space-4);
     background: var(--surface-elevated);
     border: 1px solid var(--border-hard-2);
-    border-radius: var(--radius-2xl);
+    border-radius: var(--radius-chip);
     font-size: var(--font-size-md);
     color: var(--text-secondary);
     white-space: nowrap;
