@@ -98,13 +98,19 @@ Renders when `item.item_type === "context"`. Extracts `ContextItem[]` from `item
 | Section header | `SectionHeader` (`components/`): "Context" label + item count badge (when not empty), action buttons in its `actions` snippet |
 | Text chip | `ContextItemChip` (form E2, K1 look as in `shared/ui/DOCS.md` → `ContextItemChip`): `Type` icon, `#n`, text ellipsized by CSS on one line, `title` = full content, `X` removes. Click copies the content; the `Type` icon shows `Check` for 1200 ms (`useCopyFeedback`) |
 | Image chip | `ContextItemChip` (K1 look as in `shared/ui/DOCS.md` → `ContextItemChip`): 16 px thumbnail, `#n`, `X` removes. Click opens the preview (`onOpenImagePreview`). Image chips come first, then text chips, each group in context order; `onRemoveItem` and the copy feedback use the item's index in `items` (context position), not its position on screen |
-| Replace button | Replaces context with clipboard content via `setContextFromClipboard()` |
-| Append button | Appends clipboard content to context via `appendContextFromClipboard()` |
+| Screenshot button | `ScanSquareIcon`, "Add screen area to context": `menu.captureScreenshot()` hides the menu, the user selects an area, the menu returns at the same place and the image is appended as a context item. Only shown when `captureAvailable()` (`$lib/services/capture`, backend `capture_available`) resolved `true` |
+| Select text button | `TextSelectIcon`, "Add selected text to context": `menu.toggleSelection()` keeps the menu shown and the button `active` until a selection is made in another app; the text is appended as a context item. A second click cancels. Same availability as Screenshot |
+| Paste button | `ClipboardPaste`, "Add clipboard to context": appends the clipboard via `appendContextFromClipboard()` |
+| Divider | 1 px vertical line (`--border-default`) between the add buttons and Edit / Copy / Clear |
 | Edit button | Opens the context editor window via `openContextEditor` (`$lib/services/contextEditor`) |
 | Copy button | Copies concatenated text context to clipboard (disabled when no text items) |
 | Clear button | Calls `clearContext()` to remove all context items (`variant="danger"`, disabled when empty) |
 
-Action buttons are always visible (not gated by empty state) since Replace/Append/Edit are useful even with no context.
+Action buttons are always visible (not gated by empty state) since the add buttons and Edit are useful even with no context. There is no button that replaces the context with the clipboard.
+
+#### Capture state
+
+`contextMenu.svelte.ts` holds the capture state (`null | "screenshot" | "selection"`, getter `getCapture()`). While it is not `null`, a blur does not close the menu (`useMenuBlurClose` opt `isCapturing`) and does not start the suppressed-blur recheck, because Screenshot hides the menu panel and Select text moves focus to another app. Every close (`closeMenu`: Escape, an item run, a blur outside a capture) and every `openMenu` ends a running capture with `cancel_window_capture`. Starting one capture while another runs just starts it: the backend ends the running one, which resolves `null`. Each capture carries a run number, so a late result of an ended capture neither clears the newer capture's state nor is appended. Errors are logged without the captured text.
 
 The section updates reactively because `contextMenu.svelte.ts` refetches the menu items on the `"context-changed"` Tauri event.
 

@@ -53,9 +53,8 @@ Rules for every button in the app.
    | Dictate | `Mic` |
    | Import / export | `Upload` / `Download` |
    | Insert placeholder or variable | `Braces` |
-   | Replace context with clipboard / append clipboard | `FileSymlink` / `FilePlus` |
    | Paste clipboard into context | `ClipboardPaste` |
-   | Screenshot / select text into context | `ScanSquare` / `TextSelect` |
+   | Screenshot / select text into context | `ScanSquareIcon` / `TextSelectIcon` (`$lib/icons/`, `lucide-static` wrappers taking `size` and `strokeWidth` like a `lucide-svelte` icon; `lucide-svelte` has no `scan-square`) |
    | Stop and send to chat | provider icon / `MessageSquareShare` |
    | Open in its window | `SquareArrowOutUpRight` |
    | Open history | `History` |

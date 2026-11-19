@@ -9,6 +9,12 @@ import { openConversationDialog } from "$lib/services/conversationDialog";
 import { getSettings } from "$lib/services/settings";
 import { createDigitSelector } from "$lib/utils/digitSelect";
 import { fetchSkillMetadata, getSkillMeta } from "$lib/services/skillMetadata.svelte";
+import {
+  cancelWindowCapture,
+  captureScreenshotForWindow,
+  captureSelectionForWindow,
+} from "$lib/services/capture";
+import { appendContext, appendContextImage } from "$lib/services/context";
 
 interface WorkArea {
   cursorX: number;
@@ -28,6 +34,8 @@ let _isTranscribing = $state(false);
 let _suppressClose = $state(false);
 let _recordingSkillId = $state<string | null>(null);
 let _openTrigger = $state(0);
+let _capture = $state<"screenshot" | "selection" | null>(null);
+let _captureRun = 0;
 let _openedAt = 0;
 let _workArea: WorkArea | null = null;
 let _firstPlacementPending = false;
@@ -92,6 +100,54 @@ function resumeClose() {
 
 function isInBlurGrace(): boolean {
   return Date.now() - _openedAt < BLUR_GRACE_MS;
+}
+
+function getCapture(): "screenshot" | "selection" | null {
+  return _capture;
+}
+
+function beginCapture(kind: "screenshot" | "selection"): number {
+  _capture = kind;
+  return ++_captureRun;
+}
+
+function finishCapture(run: number) {
+  if (run === _captureRun) _capture = null;
+}
+
+function endCapture() {
+  if (_capture === null) return;
+  _capture = null;
+  _captureRun++;
+  cancelWindowCapture("context-menu").catch((e) => error("Failed to cancel capture: " + e));
+}
+
+async function captureScreenshot() {
+  const run = beginCapture("screenshot");
+  try {
+    const data = await captureScreenshotForWindow("context-menu");
+    if (data && run === _captureRun) await appendContextImage(data, "image/png");
+  } catch (e) {
+    error("Screenshot capture failed: " + e);
+  } finally {
+    finishCapture(run);
+  }
+}
+
+async function toggleSelection() {
+  if (_capture === "selection") {
+    endCapture();
+    return;
+  }
+  const run = beginCapture("selection");
+  try {
+    const text = await captureSelectionForWindow("context-menu");
+    if (text && run === _captureRun) await appendContext(text);
+  } catch (e) {
+    error("Selection capture failed: " + e);
+  } finally {
+    finishCapture(run);
+  }
 }
 
 function getRecordingSkillId(): string | null {
@@ -166,6 +222,7 @@ function clearFirstPlacementPending() {
 }
 
 async function openMenu(workArea: WorkArea | null) {
+  endCapture();
   try {
     _workArea = workArea;
     _firstPlacementPending = workArea?.shellPlacement === true;
@@ -185,6 +242,7 @@ async function openMenu(workArea: WorkArea | null) {
 
 async function closeMenu(restoreFocus = true) {
   if (!_visible) return;
+  endCapture();
   _visible = false;
   _items = [];
   _selectedIndex = -1;
@@ -478,6 +536,9 @@ export {
   isSuppressed,
   resumeClose,
   isInBlurGrace,
+  getCapture,
+  captureScreenshot,
+  toggleSelection,
   moveSelection,
   executeItem,
   executeSelected,

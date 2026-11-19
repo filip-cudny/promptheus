@@ -82,6 +82,7 @@ export const fixture: Fixture = {
   "plugin:window|set_position": null,
   show_context_menu_panel: null,
   focus_context_menu: null,
+  capture_available: true,
 };
 
 export async function show() {

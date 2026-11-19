@@ -18,10 +18,10 @@
   import {
     clearContext,
     getContextText,
-    setContextFromClipboard,
     appendContextFromClipboard,
     removeContextItem,
   } from "$lib/services/context";
+  import { captureAvailable as fetchCaptureAvailable } from "$lib/services/capture";
   import { openContextEditor } from "$lib/services/contextEditor";
   import {
     copyHistoryEntryPart,
@@ -80,6 +80,7 @@
   const blurClose = useMenuBlurClose({
     isInBlurGrace: menu.isInBlurGrace,
     isSuppressed: menu.isSuppressed,
+    isCapturing: () => menu.getCapture() !== null,
     resumeClose: menu.resumeClose,
     closeMenu: menu.closeMenu,
   });
@@ -99,6 +100,7 @@
     return data?.skill_id === getExecutingSkillId();
   }
 
+  let captureAvailable = $state(false);
   let menuEl: HTMLDivElement | undefined = $state();
   let chatRowEl: HTMLElement | undefined = $state();
   let settingsToggleEl: HTMLElement | undefined = $state();
@@ -237,6 +239,7 @@
 
   onMount(async () => {
     await menu.init();
+    captureAvailable = await fetchCaptureAvailable();
     unlistenProviders = await providersStore.init();
     await blurClose.init();
   });
@@ -333,8 +336,11 @@
         {#if contextItems}
           <ContextSection
             items={contextItems}
-            onReplaceFromClipboard={setContextFromClipboard}
-            onAppendFromClipboard={appendContextFromClipboard}
+            onPaste={appendContextFromClipboard}
+            onScreenshot={menu.captureScreenshot}
+            onSelectText={menu.toggleSelection}
+            selecting={menu.getCapture() === "selection"}
+            {captureAvailable}
             onOpenEditor={openContextEditor}
             onCopyAll={handleContextCopyAll}
             onClear={clearContext}

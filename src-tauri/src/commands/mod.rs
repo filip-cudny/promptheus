@@ -65,7 +65,6 @@ macro_rules! handlers {
             $crate::commands::context::clear_context,
             $crate::commands::context::remove_context_item,
             $crate::commands::context::append_context_image,
-            $crate::commands::context::set_context_from_clipboard,
             $crate::commands::context::append_context_from_clipboard,
             // === context_editor ===
             $crate::commands::context_editor::open_context_editor,

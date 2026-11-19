@@ -5,6 +5,7 @@ const SUPPRESSED_BLUR_RECHECK_MS = 150;
 type Opts = {
   isInBlurGrace: () => boolean;
   isSuppressed: () => boolean;
+  isCapturing: () => boolean;
   resumeClose: () => void;
   closeMenu: () => Promise<void> | void;
 };
@@ -24,6 +25,7 @@ export function useMenuBlurClose(opts: Opts) {
         return;
       }
       if (opts.isInBlurGrace()) return;
+      if (opts.isCapturing()) return;
       if (opts.isSuppressed()) {
         opts.resumeClose();
         if (suppressedBlurCheckTimer) clearTimeout(suppressedBlurCheckTimer);

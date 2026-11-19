@@ -1,10 +1,12 @@
 <script lang="ts">
-  import type { ComponentType, SvelteComponent } from "svelte";
+  import type { Component, ComponentType, SvelteComponent } from "svelte";
   import type { IconProps } from "lucide-svelte";
   import { ICON_SIZE } from "$lib/constants/ui";
   import { useCopyFeedback } from "$lib/utils/copyFeedback.svelte";
 
-  type LucideIcon = ComponentType<SvelteComponent<IconProps>>;
+  type LucideIcon =
+    | ComponentType<SvelteComponent<IconProps>>
+    | Component<{ size?: number; strokeWidth?: number; fill?: string }>;
 
   let {
     icon,

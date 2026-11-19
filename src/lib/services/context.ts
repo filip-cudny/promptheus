@@ -36,10 +36,6 @@ export async function appendContextImage(
   return invoke("append_context_image", { data, mediaType });
 }
 
-export async function setContextFromClipboard(): Promise<void> {
-  return invoke("set_context_from_clipboard");
-}
-
 export async function appendContextFromClipboard(): Promise<void> {
   return invoke("append_context_from_clipboard");
 }

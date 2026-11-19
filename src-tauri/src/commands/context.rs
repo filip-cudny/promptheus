@@ -171,11 +171,6 @@ pub async fn append_context_image(
 }
 
 #[tauri::command]
-pub async fn set_context_from_clipboard(app: AppHandle) -> crate::Result<()> {
-    write_clipboard_and_emit(&app, ContextManagerService::set_item).await
-}
-
-#[tauri::command]
 pub async fn append_context_from_clipboard(app: AppHandle) -> crate::Result<()> {
     write_clipboard_and_emit(&app, ContextManagerService::append_item).await
 }

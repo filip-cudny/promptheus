@@ -3,9 +3,10 @@
   import ActionIconButton from "$lib/components/shared/ui/ActionIconButton.svelte";
   import SectionHeader from "./components/SectionHeader.svelte";
   import ContextItemChip from "$lib/components/shared/ui/ContextItemChip.svelte";
+  import ScanSquareIcon from "$lib/icons/ScanSquareIcon.svelte";
+  import TextSelectIcon from "$lib/icons/TextSelectIcon.svelte";
   import {
-    FileSymlink,
-    FilePlus,
+    ClipboardPaste,
     Pencil,
     Copy,
     Trash2,
@@ -15,8 +16,11 @@
 
   let {
     items,
-    onReplaceFromClipboard,
-    onAppendFromClipboard,
+    onPaste,
+    onScreenshot,
+    onSelectText,
+    selecting,
+    captureAvailable,
     onOpenEditor,
     onCopyAll,
     onClear,
@@ -24,8 +28,11 @@
     onOpenImagePreview,
   }: {
     items: ContextItem[];
-    onReplaceFromClipboard: () => Promise<void>;
-    onAppendFromClipboard: () => Promise<void>;
+    onPaste: () => Promise<void>;
+    onScreenshot: () => Promise<void>;
+    onSelectText: () => Promise<void>;
+    selecting: boolean;
+    captureAvailable: boolean;
     onOpenEditor: () => Promise<void>;
     onCopyAll: () => Promise<void>;
     onClear: () => Promise<void>;
@@ -53,18 +60,26 @@
 <div class="context-section">
   <SectionHeader title="Context" count={isEmpty ? undefined : items.length}>
     {#snippet actions()}
+      {#if captureAvailable}
+        <ActionIconButton
+          icon={ScanSquareIcon}
+          onclick={onScreenshot}
+          label="Add screen area to context"
+        />
+        <ActionIconButton
+          icon={TextSelectIcon}
+          onclick={onSelectText}
+          active={selecting}
+          label="Add selected text to context"
+        />
+      {/if}
       <ActionIconButton
-        icon={FileSymlink}
+        icon={ClipboardPaste}
         confirmIcon={Check}
-        onclick={onReplaceFromClipboard}
-        label="Replace context with clipboard"
+        onclick={onPaste}
+        label="Add clipboard to context"
       />
-      <ActionIconButton
-        icon={FilePlus}
-        confirmIcon={Check}
-        onclick={onAppendFromClipboard}
-        label="Append clipboard to context"
-      />
+      <span class="divider" aria-hidden="true"></span>
       <ActionIconButton
         icon={Pencil}
         onclick={onOpenEditor}
@@ -120,6 +135,13 @@
 <style>
   .context-section {
     padding: var(--space-1) var(--space-0);
+  }
+
+  .divider {
+    align-self: stretch;
+    width: 1px;
+    margin: var(--space-1);
+    background: var(--border-default);
   }
 
   .chips {
