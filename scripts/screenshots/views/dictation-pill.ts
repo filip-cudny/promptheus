@@ -34,7 +34,15 @@ function drawThumbnail(): string {
   return canvas.toDataURL("image/png");
 }
 
-const image = { index: 0, kind: "image", label: "#1", preview: "", thumbnail: drawThumbnail() };
+const image = {
+  index: 0,
+  kind: "image",
+  label: "#1",
+  preview: "",
+  thumbnail: drawThumbnail(),
+  previewWidth: 20,
+  previewHeight: 20,
+};
 
 function itemRows(images: number, texts: number) {
   return Math.min(Math.ceil(images / IMAGES_PER_ROW) + texts, MAX_ITEM_ROWS);
