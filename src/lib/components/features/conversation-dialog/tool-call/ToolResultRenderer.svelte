@@ -19,10 +19,10 @@
   let parsed = $derived(isPartial ? null : parseToolResult(result));
 
   const STATUS_COLORS: Record<HintStatus, { bg: string; fg: string }> = {
-    success: { bg: "var(--success-bg-soft)", fg: "var(--success)" },
-    error: { bg: "var(--danger-bg-soft)", fg: "var(--danger)" },
-    empty: { bg: "var(--warning-bg-soft)", fg: "var(--warning)" },
-    partial: { bg: "var(--accent-bg-soft)", fg: "var(--accent)" },
+    success: { bg: "var(--success-bg-soft)", fg: "var(--success-text)" },
+    error: { bg: "var(--danger-bg-soft)", fg: "var(--danger-text)" },
+    empty: { bg: "var(--warning-bg-soft)", fg: "var(--warning-text)" },
+    partial: { bg: "var(--accent-bg-soft)", fg: "var(--accent-text)" },
   };
 
   const MARKDOWN_PATTERN = /(?:^#{1,6}\s|^\s*[-*]\s|\*\*|```|\[.+\]\()/m;

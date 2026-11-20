@@ -684,7 +684,7 @@
 
   .segmented button.active {
     background: var(--accent-bg-soft);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .toggle-field label {

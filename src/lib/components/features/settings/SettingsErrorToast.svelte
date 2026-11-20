@@ -32,7 +32,7 @@
     background: var(--danger-bg-soft);
     border: 1px solid var(--danger-border);
     border-radius: var(--radius-md);
-    color: var(--danger);
+    color: var(--danger-text);
     font-size: var(--font-size-sm);
     box-shadow: var(--shadow-md);
   }

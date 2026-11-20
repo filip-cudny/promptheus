@@ -191,7 +191,7 @@
     margin: 0 1px;
     border-radius: 4px;
     background: var(--surface-overlay);
-    color: var(--accent-vivid);
+    color: var(--accent-text);
     font-family: var(--font-mono);
     font-size: 0.92em;
     font-weight: 500;

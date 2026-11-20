@@ -84,7 +84,7 @@
   }
 
   .step {
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);
     letter-spacing: 0.3px;

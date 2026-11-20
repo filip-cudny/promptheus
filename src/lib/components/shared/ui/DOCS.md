@@ -98,6 +98,7 @@ Rules for every button in the app.
   - `stopPropagation` on click stays.
 - `npx svelte-check` fails on an `ActionIconButton` without `label`.
 - `Button` takes an optional `icon`: icon left, `ICON_SIZE.md`.
+- `Button` colours: `primary` is `--accent-fg` on `--button-primary-bg`, `--button-primary-bg-hover` on hover (solid, not a translucent tint); `danger` is `--danger-text` on `--danger-bg-soft` with a `--danger-border` border, on hover only the border turns `--danger`.
 - `ICON_SIZE` in `$lib/constants/ui.ts`: `sm` 12, `md` 14, `lg` 16.
 
 ## Conventions
@@ -173,7 +174,7 @@ For typing dynamic Lucide icon props, use `ComponentType<SvelteComponent<IconPro
 
 - One context item in form E2: kind marker first, then `#n`, text chips then the text. Image: 16 px square thumbnail (`object-fit: cover`, radius 5 px) from `src` (a data URI) then `#n`. Text: lucide `Type` icon (12 px) then `#n` then the text on one line, ellipsized at the end; without `number` the icon then the text only.
 - Props: `kind` (`"image" | "text"`), `number`, `text`, `src`, `title`, `icon` (replaces `Type`, e.g. `Check` after a copy), `maxWidth` (text chips only), `onclick` (renders a `<button>`, stops propagation; without it a `<span>`), `onremove` with `removeLabel` (the `X` button is rendered only when `onremove` is given; it stops propagation).
-- Look K1: 20 px high, no visible border (1 px transparent, so the box keeps its size), `--accent-bg-soft` fill, hover fill `--accent-bg`, number and kind icon (`Type` or the replacing `icon`) in `--accent`, text `--text-primary`, `--radius-chip` (7 px, the same radius as the recording pill chips and `Chip`), 11 px, weight 500. Padding: left 1 px, right 7 px. The image thumbnail is inset 2 px on every side (1 px transparent border + 1 px padding horizontally, centred in the 18 px content height vertically); its radius 5 + 2 = 7, so its corners are concentric with the chip. The accent fill marks the chat Context bar's "has context" state instead of an accent edge. The recording pill keeps grey chips.
+- Look K1: 20 px high, no visible border (1 px transparent, so the box keeps its size), `--accent-bg-soft` fill, hover keeps the fill and shows a 1 px `--accent-border` border, number and kind icon (`Type` or the replacing `icon`) in `--accent-text`, text `--text-primary`, `--radius-chip` (7 px, the same radius as the recording pill chips and `Chip`), 11 px, weight 500. Padding: left 1 px, right 7 px. The image thumbnail is inset 2 px on every side (1 px transparent border + 1 px padding horizontally, centred in the 18 px content height vertically); its radius 5 + 2 = 7, so its corners are concentric with the chip. The accent fill marks the chat Context bar's "has context" state instead of an accent edge. The recording pill keeps grey chips.
 - Used by the chat Context header (`conversation-dialog/ContextSection.svelte`) and the context menu Context section (`context-menu/ContextSection.svelte`). Not used by the composer and `ContextEditor` (they keep `ImageChipBar` / `AttachmentChip`); the recording pill has its own markup.
 
 ### ImageChipBar

@@ -68,23 +68,22 @@
 
   /* --- primary --- */
   .btn-primary {
-    background: var(--accent);
+    background: var(--button-primary-bg);
     color: var(--accent-fg);
     padding: var(--space-2) var(--space-6);
   }
   .btn-primary:hover:not(:disabled) {
-    background: var(--accent-bg);
+    background: var(--button-primary-bg-hover);
     color: var(--accent-fg);
   }
 
   /* --- danger --- */
   .btn-danger {
     background: var(--danger-bg-soft);
-    color: var(--danger);
+    color: var(--danger-text);
     border: 1px solid var(--danger-border);
   }
   .btn-danger:hover:not(:disabled) {
-    background: var(--danger-border);
-    color: var(--danger);
+    border-color: var(--danger);
   }
 </style>

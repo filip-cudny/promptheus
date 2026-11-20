@@ -153,7 +153,7 @@
   }
 
   .highlight-layer :global(.placeholder-token) {
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--accent-bg-soft);
     border-radius: 2px;
     box-shadow: 0 0 0 1px var(--accent-bg-soft);
@@ -162,8 +162,8 @@
   }
 
   .highlight-layer :global(.placeholder-token.unknown) {
-    color: var(--warning, #d39a37);
-    background: rgba(211, 154, 55, 0.12);
+    color: var(--warning-text);
+    background: var(--warning-bg-soft);
     box-shadow: 0 0 0 1px rgba(211, 154, 55, 0.35);
   }
 </style>

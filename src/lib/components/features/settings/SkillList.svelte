@@ -390,7 +390,7 @@
 
   .row-meta .slug {
     font-family: var(--font-mono);
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 0.92em;
   }
 

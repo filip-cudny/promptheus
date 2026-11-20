@@ -551,7 +551,7 @@
     background: var(--surface-overlay-faint);
     border: 1px solid var(--border-faint);
     border-radius: var(--radius-xl);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .card {

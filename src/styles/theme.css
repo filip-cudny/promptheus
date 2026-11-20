@@ -33,7 +33,10 @@
   --accent-bg: rgba(76, 141, 255, 0.35);
   --accent-border: rgba(76, 141, 255, 0.50);
   --accent-ring: rgba(76, 141, 255, 0.60);
+  --accent-text: #8AB4FF;
   --user-bubble-bg: rgba(76, 141, 255, 0.07);
+  --button-primary-bg: #2F6FE0;
+  --button-primary-bg-hover: #2A62C8;
 
   accent-color: var(--accent);
 
@@ -41,15 +44,18 @@
   --danger: #d97373;
   --danger-bg-soft: rgba(217, 115, 115, 0.15);
   --danger-border: rgba(217, 115, 115, 0.35);
+  --danger-text: #e89292;
 
   --success: #62A878;
   --success-bg-soft: rgba(98, 168, 120, 0.12);
   --success-border: rgba(98, 168, 120, 0.28);
+  --success-text: #8CCB9F;
 
   --tool-running-stripe: var(--accent);
 
   --warning: #d4a843;
   --warning-bg-soft: rgba(212, 168, 67, 0.15);
+  --warning-text: #E3C277;
 
   --info: #7dd3f0;
 
@@ -192,7 +198,10 @@
   --accent-bg     : rgba(59,109,191,0.25);
   --accent-border : rgba(59,109,191,0.40);
   --accent-ring   : rgba(59,109,191,0.50);
+  --accent-text   : #234a8c;
   --user-bubble-bg: rgba(59,109,191,0.06);
+  --button-primary-bg      : var(--accent);
+  --button-primary-bg-hover: var(--accent-vivid);
 
   --tool-running-stripe: var(--accent);
 
@@ -200,15 +209,18 @@
   --danger         : #b84040;
   --danger-bg-soft : rgba(184,64,64,0.10);
   --danger-border  : rgba(184,64,64,0.30);
+  --danger-text    : #9c3333;
 
   --success        : #2d7a2d;
   --success-bg-soft: rgba(45,122,45,0.10);
   --success-border : rgba(45,122,45,0.30);
+  --success-text   : #1f5a1f;
 
   --warning        : #8a6500;
   --warning-bg-soft: rgba(138,101,0,0.10);
+  --warning-text   : #6b4e00;
 
-  --info           : #1a7a9a;
+  --info           : #166a86;
 
   /* shadows */
   --shadow-sm      : 0 1px 3px rgba(0,0,0,0.12);

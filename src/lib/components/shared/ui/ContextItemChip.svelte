@@ -95,7 +95,7 @@
   }
 
   .context-item-chip:hover {
-    background: var(--accent-bg);
+    border-color: var(--accent-border);
   }
 
   .chip-body {
@@ -128,12 +128,12 @@
     width: 16px;
     height: 16px;
     flex: none;
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .chip-number {
     flex: none;
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .chip-text {

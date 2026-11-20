@@ -251,12 +251,12 @@
   }
 
   .line.added {
-    color: var(--success);
+    color: var(--success-text);
     background: var(--success-bg-soft);
   }
 
   .line.removed {
-    color: var(--danger);
+    color: var(--danger-text);
     background: var(--danger-bg-soft);
   }
 

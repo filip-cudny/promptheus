@@ -348,7 +348,7 @@
     border: none;
     border-radius: 11px;
     background: var(--warning-bg-soft);
-    color: var(--warning);
+    color: var(--warning-text);
     font: inherit;
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);

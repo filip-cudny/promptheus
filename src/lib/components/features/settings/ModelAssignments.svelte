@@ -387,7 +387,7 @@
     padding: var(--space-0);
     font: inherit;
     font-size: var(--font-size-sm);
-    color: var(--accent);
+    color: var(--accent-text);
     cursor: pointer;
     white-space: nowrap;
   }

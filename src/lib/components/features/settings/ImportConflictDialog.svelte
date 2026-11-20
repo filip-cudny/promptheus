@@ -54,7 +54,7 @@
     padding: 0 4px;
     background: var(--surface-overlay-faint);
     border-radius: var(--radius-sm);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   footer {

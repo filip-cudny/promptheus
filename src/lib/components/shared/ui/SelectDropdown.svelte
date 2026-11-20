@@ -121,12 +121,12 @@
   .trigger.active {
     background: var(--accent-bg-soft);
     border-color: var(--accent-bg);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .trigger.active:hover {
     background: var(--accent-bg-soft);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .trigger:focus-visible {
@@ -164,7 +164,7 @@
 
   .option.selected {
     background: var(--accent-bg-soft);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .option:focus-visible {

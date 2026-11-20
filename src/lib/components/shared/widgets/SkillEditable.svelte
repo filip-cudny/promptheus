@@ -341,7 +341,8 @@
   }
 
   .highlight-overlay :global(.hl-skill-partial) {
-    color: var(--accent-ring);
+    color: var(--accent);
+    text-decoration: underline dashed;
   }
 
   .autocomplete-dropdown {
@@ -382,7 +383,7 @@
   }
 
   .autocomplete-name {
-    color: var(--accent);
+    color: var(--accent-text);
     font-family: var(--font-mono);
     flex-shrink: 0;
   }

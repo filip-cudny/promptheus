@@ -152,7 +152,7 @@
   .trigger-group.active {
     background: var(--accent-bg-soft);
     border-color: var(--accent-bg);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .trigger {
@@ -175,7 +175,7 @@
 
   .trigger-group.active .trigger:hover {
     background: var(--accent-bg-soft);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .label {

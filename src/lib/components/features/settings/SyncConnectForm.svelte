@@ -340,11 +340,11 @@
 
   .note.ok {
     background: var(--success-bg-soft);
-    color: var(--success);
+    color: var(--success-text);
   }
 
   .note.err {
     background: var(--danger-bg-soft);
-    color: var(--danger);
+    color: var(--danger-text);
   }
 </style>

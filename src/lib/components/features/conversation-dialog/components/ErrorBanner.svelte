@@ -35,7 +35,7 @@
     padding: var(--space-4) var(--space-5);
     background: var(--danger-bg-soft);
     border-radius: var(--radius-md);
-    color: var(--danger);
+    color: var(--danger-text);
     font-size: var(--font-size-md);
   }
 

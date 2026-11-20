@@ -39,7 +39,7 @@
     padding: var(--space-0);
     background: var(--accent-bg-soft);
     border: 1px solid var(--accent-bg);
-    color: var(--accent);
+    color: var(--accent-text);
     border-radius: var(--radius-lg);
     font: inherit;
     font-size: var(--font-size-sm);
@@ -67,7 +67,7 @@
     overflow: hidden;
     transition: width var(--motion-default) var(--ease-default), opacity var(--motion-default) var(--ease-default), margin var(--motion-default) var(--ease-default);
     margin-left: var(--space-0);
-    color: var(--accent);
+    color: var(--accent-text);
     pointer-events: none;
   }
 
