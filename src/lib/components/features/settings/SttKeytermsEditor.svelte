@@ -501,7 +501,7 @@
 
   .chip-remove:hover {
     background: var(--accent-bg-soft);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .input-shell {
@@ -524,7 +524,7 @@
   .input-shell.has-content {
     border-style: solid;
     border-color: var(--accent-border);
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--accent-bg-soft);
   }
 

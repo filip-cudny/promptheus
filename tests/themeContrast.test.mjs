@@ -75,6 +75,8 @@ const pairs = [
   ["SkillEditor slug chip", "--accent-text", ["--surface-overlay-faint"], "--surface-base", TEXT],
   ["ImportConflictDialog code", "--accent-text", ["--surface-overlay-faint"], "--surface-floating-modal", TEXT],
   ["UserBubble skill badge", "--accent-text", ["--user-bubble-bg", "--surface-overlay"], "--surface-base", TEXT],
+  ["SttKeytermsEditor chip remove, hover", "--accent-text", ["--accent-bg-soft"], "--surface-raised", ICON],
+  ["SttKeytermsEditor input plus icon, focused or filled", "--accent-text", ["--surface-overlay-faint", "--accent-bg-soft"], "--surface-base", ICON],
   ["Status pill success", "--success-text", ["--success-bg-soft"], "--surface-base", TEXT],
   ["Status pill error", "--danger-text", ["--danger-bg-soft"], "--surface-base", TEXT],
   ["Status pill empty", "--warning-text", ["--warning-bg-soft"], "--surface-base", TEXT],
