@@ -128,7 +128,7 @@ The execution store is initialized in `src/windows/context-menu/App.svelte`.
 
 ### LastInteractionSection (`LastInteractionSection.svelte`)
 
-Renders when `item.item_type === "last_interaction"`. The backend injects last interaction data into `item.data` in the `get_context_menu_items` command (from `HistoryService`). The section is one row, with no header:
+Renders when `item.item_type === "last_interaction"`. The backend injects last interaction data into `item.data` in the `get_context_menu_items` command (from `HistoryService`). The section is one row that never wraps (`flex-wrap: nowrap`; the failed-transcript retry lives inside the chip so the row fits the 320 px menu), with no header:
 
 | Element | Description |
 |---------|-------------|
@@ -150,7 +150,7 @@ The `Transcript` chip is driven by `data.transcription`, a state object rather t
 |----------|------|
 | `ok` | Copy icon, label `Transcript`, click copies the transcript |
 | `retrying` | Spinner + "Retrying…", not clickable |
-| `failed` | Alert icon in `--danger`, tooltip carries the error; a `RotateCcw` `ActionIconButton` ("Retry transcription") next to it invokes `retry_transcription` when `has_audio` is true |
+| `failed` | Chip in `--danger`, tooltip carries the error. With `has_audio`: `RotateCcw` icon, a click invokes `retry_transcription` (tooltip ends "click to retry"). Without: alert icon, disabled |
 
 The backend builds this payload in `get_context_menu_items` and marks `retrying` from `SpeechService::retrying_entries()`. The store refreshes on `speech-transcription-retry` in addition to the existing complete/error events, so the chip tracks a retry that was started from the history window.
 

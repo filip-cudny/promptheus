@@ -51,6 +51,7 @@
   let transcription = $derived(data?.transcription ?? null);
   let transcriptionFailed = $derived(transcription?.status === "failed");
   let transcriptionRetrying = $derived(transcription?.status === "retrying");
+  let transcriptionRetryable = $derived(transcriptionFailed && !!transcription?.entry_id && !!transcription?.has_audio);
 
   let chips = $derived<ChipEntry[]>([
     {
@@ -72,7 +73,7 @@
     if (transcriptionFailed) {
       const reason = transcription?.error ?? "Transcription failed";
       return transcription?.has_audio
-        ? `${reason} — audio kept, retry available`
+        ? `${reason} — click to retry`
         : `${reason} — audio no longer available`;
     }
     return "Copy the last transcript";
@@ -131,13 +132,15 @@
 
       <div class="transcription-group" class:failed={transcriptionFailed}>
         <Chip
-          onclick={() => handleCopy("transcription", !!transcription?.preview && !transcriptionRetrying)}
-          disabled={!transcription?.preview || transcriptionRetrying}
+          onclick={() => (transcriptionRetryable ? handleRetry() : handleCopy("transcription", !!transcription?.preview && !transcriptionRetrying))}
+          disabled={!transcriptionRetryable && (!transcription?.preview || transcriptionRetrying)}
           title={transcriptionTitle}
         >
           <span class="chip-copy">
             {#if transcriptionRetrying}
               <span class="spinning"><LoaderCircle size={ICON_SIZE.md} /></span>
+            {:else if transcriptionRetryable}
+              <RotateCcw size={ICON_SIZE.md} />
             {:else if transcriptionFailed}
               <CircleAlert size={ICON_SIZE.md} />
             {:else if copyFeedback.confirmed === "transcription"}
@@ -150,10 +153,6 @@
             {transcriptionRetrying ? "Retrying…" : "Transcript"}
           </span>
         </Chip>
-
-        {#if transcriptionFailed && transcription?.has_audio}
-          <ActionIconButton icon={RotateCcw} onclick={handleRetry} label="Retry transcription" />
-        {/if}
       </div>
     </div>
 
@@ -190,7 +189,7 @@
 
   .row {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-4) var(--space-2) var(--space-6);
@@ -198,7 +197,7 @@
 
   .chips {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: var(--space-2);
   }
