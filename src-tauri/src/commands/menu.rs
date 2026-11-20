@@ -307,6 +307,24 @@ pub async fn place_context_menu(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn set_context_menu_input_region(
+    app: tauri::AppHandle,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> crate::Result<()> {
+    #[cfg(target_os = "linux")]
+    if crate::services::gnome_shell::is_gnome_wayland() {
+        let win = window(&app, "context-menu")?;
+        crate::services::menu_input_region::set(&win.as_ref().window(), (x, y, width, height));
+        return Ok(());
+    }
+    let _ = (app, x, y, width, height);
+    Ok(())
+}
+
 #[cfg(target_os = "linux")]
 async fn place_context_menu_through_shell(
     app: &tauri::AppHandle,

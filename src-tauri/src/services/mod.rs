@@ -27,6 +27,7 @@ pub mod dialog;
 pub mod dock;
 pub mod dock_icon;
 pub mod menu_coordinator;
+pub mod menu_input_region;
 pub mod monitor;
 pub mod notification;
 pub mod notification_window;

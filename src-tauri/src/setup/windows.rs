@@ -43,8 +43,7 @@ pub fn create(app: &tauri::App) -> std::result::Result<(), Box<dyn std::error::E
             log::warn!("failed to convert context-menu to non-activating panel: {e}");
         }
     }
-    #[cfg(not(target_os = "macos"))]
-    let _ = context_menu_window;
+    crate::services::menu_input_region::install(&context_menu_window.as_ref().window());
 
     overlay(
         app,

@@ -121,6 +121,7 @@ macro_rules! handlers {
             $crate::commands::menu::execute_menu_item,
             $crate::commands::menu::show_context_menu_panel,
             $crate::commands::menu::place_context_menu,
+            $crate::commands::menu::set_context_menu_input_region,
             $crate::commands::menu::clamp_menu_origin,
             $crate::commands::menu::hide_context_menu_panel,
             $crate::commands::menu::focus_context_menu,
