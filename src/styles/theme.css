@@ -143,6 +143,9 @@
   --notification-bg: #ffffff;
   --notification-fg: #1a1a1a;
   --notification-fg-secondary: rgba(0, 0, 0, 0.65);
+
+  --tag-bg: var(--accent-bg-soft);
+  --tag-border: var(--accent-border);
 }
 
 :root[data-platform="linux"] {
@@ -217,6 +220,10 @@
   --notification-bg          : #ffffff;
   --notification-fg          : #1a1a1a;
   --notification-fg-secondary: rgba(0,0,0,0.65);
+
+  /* tags */
+  --tag-bg    : rgba(59,109,191,0.20);
+  --tag-border: rgba(59,109,191,0.60);
 
   /* glassy floating surfaces */
   --surface-input-bar        : rgba(255, 255, 255, 0.75);

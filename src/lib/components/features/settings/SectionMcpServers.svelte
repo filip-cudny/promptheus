@@ -694,9 +694,9 @@
     font: inherit;
     font-size: var(--font-size-xs);
     padding: 1px var(--space-3);
-    background: var(--accent-bg-soft);
-    color: var(--accent);
-    border: 1px solid var(--accent-border);
+    background: var(--tag-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--tag-border);
     border-radius: var(--radius-xl);
     line-height: 1.4;
     white-space: nowrap;
@@ -709,6 +709,7 @@
 
   .tag.link {
     background: transparent;
+    color: var(--accent);
     border: none;
     padding: 0;
     font-size: inherit;
