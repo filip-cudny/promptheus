@@ -179,7 +179,7 @@ async fn run_shell_shortcuts(app: tauri::AppHandle, initial_settings: Settings) 
                             ),
                         };
                         app.state::<crate::services::speech::widget::RecordingWidget>()
-                            .shell_moved(&app, placement);
+                            .shell_moved(&app, placement, args.scale);
                     }
                     Err(e) => log::warn!("invalid RecordingWidgetMoved signal: {e}"),
                 }

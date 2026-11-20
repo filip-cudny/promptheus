@@ -44,6 +44,9 @@ const LEVEL_ATTACK: f64 = 0.6;
 const LEVEL_RELEASE: f64 = 0.2;
 const BOTTOM_MARGIN: f64 = 24.0;
 const PILL_WIDTH: f64 = 264.0;
+const PREVIEW_MAX_WIDTH: f64 = PILL_WIDTH;
+const PREVIEW_MAX_HEIGHT: f64 = 160.0;
+const PREVIEW_MIN_BOX: u32 = 32;
 const PILL_HEIGHT: f64 = 72.0;
 const MAX_ITEM_ROWS: u32 = 3;
 const ITEM_ROW_HEIGHT: f64 = 24.0;
@@ -155,6 +158,7 @@ fn widget_payload(
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PillItem {
     pub index: u32,
     pub kind: String,
@@ -162,6 +166,8 @@ pub struct PillItem {
     pub preview: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thumbnail: Option<String>,
+    pub preview_width: u32,
+    pub preview_height: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -298,6 +304,9 @@ struct Inner {
     placement: Option<Placement>,
     item_rows: u32,
     scale: f64,
+    #[cfg(target_os = "linux")]
+    shell_scale: f64,
+    preview_sizes: Vec<(u32, u32)>,
     grows_down: bool,
     overlay: Option<Overlay>,
     overlay_seq: u64,
@@ -359,6 +368,7 @@ pub struct RecordingWidget {
     overlay_visible: AtomicBool,
     programmatic_origin: std::sync::Mutex<Option<(i32, i32)>>,
     thumbnails: super::pill_previews::ThumbnailCache,
+    pixel_sizes: super::pill_previews::PixelSizeCache,
 }
 
 pub fn choose_transport(enabled: bool, session: SessionKind) -> Option<Transport> {
@@ -557,7 +567,15 @@ pub fn pill_items(items: &[ContextItem]) -> Vec<PillItem> {
                 ContextItem::Text { number, content } => ("text", format!("#{number}"), text_preview(content)),
                 ContextItem::Image { number, .. } => ("image", format!("#{number}"), String::new()),
             };
-            PillItem { index: index as u32, kind: kind.to_string(), label, preview, thumbnail: None }
+            PillItem {
+                index: index as u32,
+                kind: kind.to_string(),
+                label,
+                preview,
+                thumbnail: None,
+                preview_width: 0,
+                preview_height: 0,
+            }
         })
         .collect()
 }
@@ -619,7 +637,7 @@ async fn gather_model(app: &AppHandle, origin: (i32, i32), items: &[ContextItem]
     build_model(targets, pending.as_ref(), locked, items, current_context_version(), origin, destination)
 }
 
-async fn warm_thumbnails(app: &AppHandle, context_items: &[ContextItem]) {
+async fn warm_image_caches(app: &AppHandle, context_items: &[ContextItem], thumbnails: bool) {
     let images: Vec<(String, String)> = context_items
         .iter()
         .filter_map(|item| match item {
@@ -629,12 +647,88 @@ async fn warm_thumbnails(app: &AppHandle, context_items: &[ContextItem]) {
         .collect();
     let app = app.clone();
     let warmed = tauri::async_runtime::spawn_blocking(move || {
-        app.state::<RecordingWidget>().thumbnails.refresh(&images);
+        let widget = app.state::<RecordingWidget>();
+        widget.pixel_sizes.refresh(&images);
+        if thumbnails {
+            widget.thumbnails.refresh(&images);
+        }
     })
     .await;
     if let Err(e) = warmed {
-        log::warn!("the pill thumbnail task failed: {e}");
+        log::warn!("the pill image cache task failed: {e}");
     }
+}
+
+pub fn preview_display_size(pixels: (u32, u32), scale: f64) -> (u32, u32) {
+    // Deliberate simplification: the divisor is the scale of the pill's monitor, so an image captured
+    // or copied on a monitor of another scale shows at size × the scale ratio. Upgrade path: items
+    // carry their own scale. Stops being correct when items carry their own scale.
+    let width = pixels.0 as f64 / scale;
+    let height = pixels.1 as f64 / scale;
+    let factor = (PREVIEW_MAX_WIDTH / width).min(PREVIEW_MAX_HEIGHT / height).min(1.0);
+    ((width * factor).round().max(1.0) as u32, (height * factor).round().max(1.0) as u32)
+}
+
+pub fn preview_box(display: (u32, u32)) -> (u32, u32) {
+    (display.0.max(PREVIEW_MIN_BOX), display.1.max(PREVIEW_MIN_BOX))
+}
+
+fn preview_sizes(
+    context_items: &[ContextItem],
+    scale: f64,
+    pixel_size: impl Fn(&str) -> Option<(u32, u32)>,
+) -> Vec<(u32, u32)> {
+    context_items
+        .iter()
+        .map(|item| match item {
+            ContextItem::Image { data, .. } => {
+                pixel_size(data).map_or((0, 0), |pixels| preview_display_size(pixels, scale))
+            }
+            ContextItem::Text { .. } => (0, 0),
+        })
+        .collect()
+}
+
+fn preview_scale(inner: &Inner, transport: Transport) -> f64 {
+    match transport {
+        Transport::Window => inner.scale,
+        #[cfg(target_os = "linux")]
+        Transport::Shell => inner.shell_scale,
+    }
+}
+
+fn attach_preview_sizes(
+    app: &AppHandle,
+    inner: &mut Inner,
+    transport: Transport,
+    items: &mut [PillItem],
+    context_items: &[ContextItem],
+) {
+    let widget = app.state::<RecordingWidget>();
+    let sizes = preview_sizes(context_items, preview_scale(inner, transport), |data| widget.pixel_sizes.get(data));
+    for (item, size) in items.iter_mut().zip(&sizes) {
+        (item.preview_width, item.preview_height) = *size;
+    }
+    inner.preview_sizes = sizes;
+}
+
+#[cfg(target_os = "linux")]
+type ShellItem = (u32, String, String, String, String, u32, u32);
+
+#[cfg(target_os = "linux")]
+fn shell_items(items: Vec<PillItem>, context_items: &[ContextItem], image_paths: Vec<String>) -> Vec<ShellItem> {
+    let mut paths = image_paths.into_iter();
+    items
+        .into_iter()
+        .zip(context_items)
+        .map(|(item, source)| {
+            let image_path = match source {
+                ContextItem::Image { .. } => paths.next().unwrap_or_default(),
+                ContextItem::Text { .. } => String::new(),
+            };
+            (item.index, item.kind, item.label, item.preview, image_path, item.preview_width, item.preview_height)
+        })
+        .collect()
 }
 
 fn attach_thumbnails(app: &AppHandle, items: &mut [PillItem], context_items: &[ContextItem]) {
@@ -747,7 +841,7 @@ async fn show_in_shell(
     app: &AppHandle,
     settings: WidgetSettings,
     size: (f64, f64),
-) -> Result<(crate::services::gnome_shell::ShellProxy<'static>, Placement), String> {
+) -> Result<(crate::services::gnome_shell::ShellProxy<'static>, Placement, f64), String> {
     let proxy = crate::services::gnome_shell::proxy()
         .await
         .map_err(|e| e.to_string())?;
@@ -766,7 +860,7 @@ async fn show_in_shell(
         let (x, y) = stored.unwrap_or((0, 0));
         (x, y, stored.is_some())
     };
-    let (x, y, work_x, work_y, work_width, work_height) = proxy
+    let (x, y, work_x, work_y, work_width, work_height, scale) = proxy
         .show_recording_widget(x, y, has_position, settings.monochromatic)
         .await
         .map_err(|e| e.to_string())?;
@@ -782,7 +876,7 @@ async fn show_in_shell(
         "default"
     };
     log_placement(source, settings.anchor, placement.origin, size, placement.work_area);
-    Ok((proxy, placement))
+    Ok((proxy, placement, scale))
 }
 
 async fn work_areas(app: &AppHandle) -> Result<Vec<Rect>, String> {
@@ -810,6 +904,9 @@ impl RecordingWidget {
                 placement: None,
                 item_rows: 0,
                 scale: 1.0,
+                #[cfg(target_os = "linux")]
+                shell_scale: 1.0,
+                preview_sizes: Vec::new(),
                 grows_down: false,
                 overlay: None,
                 overlay_seq: 0,
@@ -820,6 +917,7 @@ impl RecordingWidget {
             overlay_visible: AtomicBool::new(false),
             programmatic_origin: std::sync::Mutex::new(None),
             thumbnails: super::pill_previews::ThumbnailCache::default(),
+            pixel_sizes: super::pill_previews::PixelSizeCache::default(),
         }
     }
 
@@ -847,14 +945,16 @@ impl RecordingWidget {
 
         let context_items = current_context_items(app).await;
         let item_rows = gather_model(app, (0, 0), &context_items).await.item_rows;
-        if transport == Transport::Window {
-            warm_thumbnails(app, &context_items).await;
-        }
+        warm_image_caches(app, &context_items, transport == Transport::Window).await;
         let mut inner = self.inner.lock().await;
         inner.generation += 1;
         inner.session = session;
         inner.item_rows = item_rows;
         inner.scale = 1.0;
+        #[cfg(target_os = "linux")]
+        {
+            inner.shell_scale = 1.0;
+        }
         inner.grows_down = grows_down(settings);
         inner.state = WidgetState::Recording;
         inner.elapsed_ms = 0;
@@ -872,9 +972,10 @@ impl RecordingWidget {
 
         let shown = match transport {
             #[cfg(target_os = "linux")]
-            Transport::Shell => show_in_shell(app, settings, pill_size(item_rows)).await.map(|(proxy, placement)| {
+            Transport::Shell => show_in_shell(app, settings, pill_size(item_rows)).await.map(|(proxy, placement, scale)| {
                 inner.shell = Some(proxy);
                 inner.placement = Some(placement);
+                inner.shell_scale = scale;
             }),
             Transport::Window => self.place_window(app, settings, item_rows).await.map(|(placement, scale)| {
                 inner.placement = Some(placement);
@@ -1123,9 +1224,7 @@ impl RecordingWidget {
             return;
         };
         let context_items = current_context_items(app).await;
-        if transport == Transport::Window {
-            warm_thumbnails(app, &context_items).await;
-        }
+        warm_image_caches(app, &context_items, transport == Transport::Window).await;
         let mut inner = self.inner.lock().await;
         if inner.transport.is_none() {
             return;
@@ -1354,11 +1453,15 @@ impl RecordingWidget {
     }
 
     #[cfg(target_os = "linux")]
-    pub fn shell_moved(&self, app: &AppHandle, placement: Placement) {
+    pub fn shell_moved(&self, app: &AppHandle, placement: Placement, scale: f64) {
         let app = app.clone();
         tauri::async_runtime::spawn(async move {
             let widget = app.state::<RecordingWidget>();
-            widget.inner.lock().await.placement = Some(placement);
+            {
+                let mut inner = widget.inner.lock().await;
+                inner.placement = Some(placement);
+                inner.shell_scale = scale;
+            }
             let position = (placement.origin.0 as i32, placement.origin.1 as i32);
             widget.store_drag_debounced(&app, SHELL_POSITION_KEY, position).await;
         });
@@ -1592,23 +1695,13 @@ async fn push_model(app: &AppHandle, inner: &mut Inner, mut model: PillModel, co
         model.x = placement.origin.0.round() as i32;
         model.y = placement.origin.1.round() as i32;
     }
+    attach_preview_sizes(app, inner, transport, &mut model.items, context_items);
     let result = match transport {
         #[cfg(target_os = "linux")]
         Transport::Shell => match &inner.shell {
             Some(proxy) => {
-                let mut paths = sync_preview_files(app, context_items).await.into_iter();
-                let items = model
-                    .items
-                    .into_iter()
-                    .zip(context_items)
-                    .map(|(item, source)| {
-                        let image_path = match source {
-                            ContextItem::Image { .. } => paths.next().unwrap_or_default(),
-                            ContextItem::Text { .. } => String::new(),
-                        };
-                        (item.index, item.kind, item.label, item.preview, image_path)
-                    })
-                    .collect();
+                let paths = sync_preview_files(app, context_items).await;
+                let items = shell_items(model.items, context_items, paths);
                 proxy
                     .update_recording_widget_model(
                         model.targets,
@@ -1687,6 +1780,9 @@ mod tests {
             placement: None,
             item_rows: 0,
             scale: 1.0,
+            #[cfg(target_os = "linux")]
+            shell_scale: 1.0,
+            preview_sizes: Vec::new(),
             grows_down: false,
             overlay: None,
             overlay_seq: 0,
@@ -2158,6 +2254,8 @@ mod tests {
                 label: "#1".into(),
                 preview: String::new(),
                 thumbnail: None,
+                preview_width: 0,
+                preview_height: 0,
             }
         );
     }
@@ -2345,6 +2443,50 @@ mod tests {
     }
 
     #[test]
+    fn preview_display_size_fits_the_image_into_the_preview_limits() {
+        assert_eq!(preview_display_size((1920, 1080), 1.0), (264, 149));
+        assert_eq!(preview_display_size((300, 700), 1.0), (69, 160));
+        assert_eq!(preview_display_size((1200, 300), 1.0), (264, 66));
+        assert_eq!(preview_display_size((600, 600), 1.0), (160, 160));
+        assert_eq!(preview_display_size((120, 60), 1.0), (120, 60));
+        assert_eq!(preview_display_size((2000, 40), 1.0), (264, 5));
+        assert_eq!(preview_display_size((4000, 5), 1.0), (264, 1));
+        assert_eq!(preview_display_size((200, 100), 2.0), (100, 50));
+    }
+
+    #[test]
+    fn the_box_is_at_least_32_points_per_side() {
+        assert_eq!(preview_box((264, 149)), (264, 149));
+        assert_eq!(preview_box((264, 5)), (264, 32));
+        assert_eq!(preview_box((264, 1)), (264, 32));
+        assert_eq!(preview_box((120, 60)), (120, 60));
+    }
+
+    #[test]
+    fn display_sizes_are_zero_for_text_and_for_an_unreadable_image() {
+        let image = |number, data: &str| ContextItem::Image { number, data: data.into(), media_type: "image/png".into() };
+        let items = [numbered_text(1), image(1, "readable"), image(2, "broken")];
+        let sizes = preview_sizes(&items, 1.0, |data| (data == "readable").then_some((200, 100)));
+        assert_eq!(sizes, [(0, 0), (200, 100), (0, 0)]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_shell_items_carry_the_display_sizes() {
+        let context_items = [numbered_text(1), numbered_image(1)];
+        let mut items = pill_items(&context_items);
+        items[1].preview_width = 264;
+        items[1].preview_height = 149;
+        assert_eq!(
+            shell_items(items, &context_items, vec!["/tmp/a.png".into()]),
+            [
+                (0, "text".into(), "#1".into(), "t".into(), String::new(), 0, 0),
+                (1, "image".into(), "#1".into(), String::new(), "/tmp/a.png".into(), 264, 149),
+            ]
+        );
+    }
+
+    #[test]
     fn the_window_model_serializes_the_keys_the_webview_reads() {
         let model = PillModel {
             targets: vec![("__dictation__".into(), "Dictation".into())],
@@ -2358,6 +2500,8 @@ mod tests {
                     label: "#1".into(),
                     preview: "hello".into(),
                     thumbnail: None,
+                    preview_width: 0,
+                    preview_height: 0,
                 },
                 PillItem {
                     index: 1,
@@ -2365,6 +2509,8 @@ mod tests {
                     label: "#1".into(),
                     preview: String::new(),
                     thumbnail: Some("data:image/png;base64,AAAA".into()),
+                    preview_width: 264,
+                    preview_height: 149,
                 },
             ],
             item_rows: 2,
@@ -2381,13 +2527,22 @@ mod tests {
                 "selectedLabel": "Dictation",
                 "targetLocked": false,
                 "items": [
-                    { "index": 0, "kind": "text", "label": "#1", "preview": "hello" },
+                    {
+                        "index": 0,
+                        "kind": "text",
+                        "label": "#1",
+                        "preview": "hello",
+                        "previewWidth": 0,
+                        "previewHeight": 0
+                    },
                     {
                         "index": 1,
                         "kind": "image",
                         "label": "#1",
                         "preview": "",
-                        "thumbnail": "data:image/png;base64,AAAA"
+                        "thumbnail": "data:image/png;base64,AAAA",
+                        "previewWidth": 264,
+                        "previewHeight": 149
                     }
                 ],
                 "itemRows": 2,

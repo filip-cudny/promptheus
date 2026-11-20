@@ -46,7 +46,7 @@ pub trait Shell {
         y: i32,
         has_position: bool,
         monochromatic: bool,
-    ) -> zbus::Result<(i32, i32, i32, i32, i32, i32)>;
+    ) -> zbus::Result<(i32, i32, i32, i32, i32, i32, f64)>;
 
     fn update_recording_widget(
         &self,
@@ -69,7 +69,7 @@ pub trait Shell {
         selected_id: &str,
         selected_label: &str,
         target_locked: bool,
-        items: Vec<(u32, String, String, String, String)>,
+        items: Vec<(u32, String, String, String, String, u32, u32)>,
         item_rows: u32,
         context_version: u64,
         x: i32,
@@ -97,6 +97,7 @@ pub trait Shell {
         work_y: i32,
         work_width: i32,
         work_height: i32,
+        scale: f64,
     ) -> zbus::Result<()>;
 
     #[zbus(signal, name = "ToastActivated")]
