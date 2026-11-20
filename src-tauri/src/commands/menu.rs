@@ -14,7 +14,7 @@ use crate::services::menu_coordinator::MenuCoordinator;
 use crate::services::dialog::window;
 use crate::services::monitor::{clamp_origin, cursor_work_area, CursorWorkArea};
 use crate::services::skill::{strip_skill_prefix, SkillService};
-use crate::services::speech::{AudioClipStore, PendingOrigin, SpeechService};
+use crate::services::speech::{AudioClipStore, PendingOrigin, SpeechError, SpeechService};
 use crate::services::sqlite_history::SqliteHistoryService;
 
 pub const CONTEXT_MENU_TITLE: &str = "Promptheus Context Menu";
@@ -135,6 +135,7 @@ pub async fn get_context_menu_items(
             "entry_id": entry.id,
             "preview": entry.output_preview.as_deref().map(|c| truncate(c, 200)),
             "error": entry.error,
+            "cancelled": entry.error.as_deref() == Some(SpeechError::Cancelled.to_string().as_str()),
             "has_audio": last_speech_clip.is_some(),
             "expires_at": last_speech_clip.as_ref().map(|c| c.expires_at.clone()),
         })

@@ -151,6 +151,7 @@ The `Transcript` chip is driven by `data.transcription`, a state object rather t
 | `ok` | Copy icon, label `Transcript`, click copies the transcript |
 | `retrying` | Spinner + "Retrying…", not clickable |
 | `failed` | Chip in `--danger`, tooltip carries the error. With `has_audio`: `RotateCcw` icon, a click invokes `retry_transcription` (tooltip ends "click to retry"). Without: alert icon, disabled |
+| `failed` + `cancelled` | As `failed`, but neutral colour: a recording cancelled in the pill is the user's choice, not an error. `cancelled` is set by the backend when the entry's error equals `SpeechError::Cancelled` |
 
 The backend builds this payload in `get_context_menu_items` and marks `retrying` from `SpeechService::retrying_entries()`. The store refreshes on `speech-transcription-retry` in addition to the existing complete/error events, so the chip tracks a retry that was started from the history window.
 

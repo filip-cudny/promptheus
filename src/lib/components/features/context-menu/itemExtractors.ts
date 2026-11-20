@@ -13,6 +13,7 @@ export interface TranscriptionChipData {
   entry_id: string;
   preview: string | null;
   error: string | null;
+  cancelled: boolean;
   has_audio: boolean;
   expires_at: string | null;
 }

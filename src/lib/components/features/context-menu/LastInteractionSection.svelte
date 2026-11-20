@@ -130,7 +130,7 @@
         </Chip>
       {/each}
 
-      <div class="transcription-group" class:failed={transcriptionFailed}>
+      <div class="transcription-group" class:failed={transcriptionFailed && !transcription?.cancelled}>
         <Chip
           onclick={() => (transcriptionRetryable ? handleRetry() : handleCopy("transcription", !!transcription?.preview && !transcriptionRetrying))}
           disabled={!transcriptionRetryable && (!transcription?.preview || transcriptionRetrying)}

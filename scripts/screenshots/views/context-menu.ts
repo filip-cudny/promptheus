@@ -58,6 +58,7 @@ const menuItems = [
         entry_id: "entry-speech-1",
         preview: "Remind me to send the slides before the call.",
         error: null,
+        cancelled: false,
         has_audio: false,
         expires_at: null,
       },
