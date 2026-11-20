@@ -64,6 +64,7 @@
   const positioning = useMenuPositioning({
     getMenuEl: () => menuEl,
     isVisible: () => menu.isVisible(),
+    isListOpen: () => recentListOpen,
     getWorkArea: menu.getWorkArea,
   });
 
@@ -150,10 +151,10 @@
       untrack(() => panels.closeAll());
       const isNewOpen = openTrigger !== handledOpenTrigger;
       handledOpenTrigger = openTrigger;
-      if (!isNewOpen && untrack(() => recentListOpen)) {
-        void positioning.resizeKeepingTop();
-      } else {
+      if (isNewOpen) {
         void positioning.triggerReposition();
+      } else {
+        untrack(() => void positioning.refresh());
       }
     }
   });
@@ -163,7 +164,16 @@
     if (open === previousRecentListOpen) return;
     previousRecentListOpen = open;
     untrack(() => {
-      if (menu.isVisible()) void positioning.resizeKeepingTop();
+      if (menu.isVisible()) void positioning.toggleList(open);
+    });
+  });
+
+  $effect(() => {
+    void panels.chatProvidersOpen;
+    void panels.settingsOpen;
+    void panels.actionMenuId;
+    untrack(() => {
+      if (menu.isVisible()) void positioning.updateInputRegion();
     });
   });
 
@@ -253,7 +263,7 @@
 
 <svelte:window onkeydown={keyboard.onkeydown} onkeyup={keyboard.onkeyup} />
 
-<MenuShell bind:ref={menuEl} onmousemove={positioning.enableHover}>
+<MenuShell bind:ref={menuEl} offsetTop={positioning.menuOffset} onmousemove={positioning.enableHover}>
   {#if menuItems.length === 0}
     <MenuEmptyState />
   {:else}

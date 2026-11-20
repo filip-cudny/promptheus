@@ -4,15 +4,17 @@
   let {
     ref = $bindable<HTMLDivElement | undefined>(),
     children,
+    offsetTop = 0,
     onmousemove,
   }: {
     ref?: HTMLDivElement | undefined;
     children: Snippet;
+    offsetTop?: number;
     onmousemove?: (e: MouseEvent) => void;
   } = $props();
 </script>
 
-<div class="menu-shell" role="menu" tabindex="-1" bind:this={ref} {onmousemove}>
+<div class="menu-shell" role="menu" tabindex="-1" bind:this={ref} style:margin-top="{offsetTop}px" {onmousemove}>
   {@render children()}
 </div>
 

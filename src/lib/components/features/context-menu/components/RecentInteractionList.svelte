@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { Search } from "lucide-svelte";
-  import { ICON_SIZE } from "$lib/constants/ui";
   import { useCopyFeedback } from "$lib/utils/copyFeedback.svelte";
   import { rankByQuery } from "$lib/utils/fuzzyRank";
   import { useListSelection } from "$lib/components/shared/drivers/useListSelection.svelte";
   import type { RecentQuickAction } from "$lib/services/history";
+  import RecentListFrame from "./RecentListFrame.svelte";
   import RecentInteractionRow, {
     firstLine,
     secondLine,
@@ -71,9 +70,8 @@
   }
 </script>
 
-<div class="recent-list">
-  <div class="filter">
-    <Search size={ICON_SIZE.md} />
+<RecentListFrame>
+  {#snippet filter()}
     <input
       bind:this={inputEl}
       bind:value={query}
@@ -86,74 +84,35 @@
     {#if filtering}
       <span class="count">{ranked.length}</span>
     {/if}
-  </div>
+  {/snippet}
 
-  <div class="box" role="listbox">
-    {#if rows !== null && rows.length === 0}
-      <div class="empty">No entries</div>
-    {:else if rows !== null && ranked.length === 0}
-      <div class="empty">No matches</div>
-    {:else}
-      {#each ranked as { item, matches }, i (item.id)}
-        <RecentInteractionRow
-          row={item}
-          {matches}
-          selected={i === selection.index}
-          copied={copyFeedback.confirmed === item.id}
-          bind:element={selection.itemEls[i]}
-          onhover={() => (selection.index = i)}
-          onCopyOutput={() => copy(item, "output")}
-          onCopyPart={(part) => copy(item, part)}
-          onOpenInChat={() => onOpenInChat(item)}
-          onRetry={() => onRetry(item.id)}
-        />
-      {/each}
-    {/if}
-  </div>
-</div>
+  {#if rows !== null && rows.length === 0}
+    <div class="empty">No entries</div>
+  {:else if rows !== null && ranked.length === 0}
+    <div class="empty">No matches</div>
+  {:else}
+    {#each ranked as { item, matches }, i (item.id)}
+      <RecentInteractionRow
+        row={item}
+        {matches}
+        selected={i === selection.index}
+        copied={copyFeedback.confirmed === item.id}
+        bind:element={selection.itemEls[i]}
+        onhover={() => (selection.index = i)}
+        onCopyOutput={() => copy(item, "output")}
+        onCopyPart={(part) => copy(item, part)}
+        onOpenInChat={() => onOpenInChat(item)}
+        onRetry={() => onRetry(item.id)}
+      />
+    {/each}
+  {/if}
+</RecentListFrame>
 
 <style>
-  .recent-list {
-    margin: var(--space-1) var(--space-6) var(--space-3);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-  }
-
-  .filter {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-2) var(--space-4);
-    border-bottom: 1px solid var(--border-default);
-    color: var(--text-muted);
-  }
-
-  .filter input {
-    flex: 1;
-    min-width: 0;
-    padding: var(--space-0);
-    border: 0;
-    outline: 0;
-    background: transparent;
-    color: var(--text-primary);
-    font: inherit;
-    font-size: var(--font-size-md);
-  }
-
-  .filter input::placeholder {
-    color: var(--text-faint);
-  }
-
   .count {
     flex: none;
     font-size: var(--font-size-sm);
     color: var(--text-faint);
-  }
-
-  .box {
-    height: 160px;
-    overflow-y: auto;
   }
 
   .empty {

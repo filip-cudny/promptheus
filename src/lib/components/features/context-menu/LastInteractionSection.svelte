@@ -15,6 +15,7 @@
   import ActionIconButton from "$lib/components/shared/ui/ActionIconButton.svelte";
   import Chip from "$lib/components/shared/ui/Chip.svelte";
   import RecentInteractionList from "./components/RecentInteractionList.svelte";
+  import RecentListFrame from "./components/RecentListFrame.svelte";
   import type { LastInteractionData } from "./itemExtractors";
   import type { LastInteractionChip, RecentQuickAction } from "$lib/services/history";
 
@@ -171,6 +172,14 @@
     </div>
   </div>
 
+  <div data-measure="recent-list-block" class="measure-probe" aria-hidden="true" inert>
+    <RecentListFrame>
+      {#snippet filter()}
+        <input tabindex="-1" disabled placeholder="Filter" />
+      {/snippet}
+    </RecentListFrame>
+  </div>
+
   {#if listOpen}
     <RecentInteractionList
       rows={recentRows}
@@ -185,6 +194,16 @@
 <style>
   .last-interaction-section {
     padding: var(--space-1) var(--space-0);
+  }
+
+  .measure-probe {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    visibility: hidden;
+    pointer-events: none;
+    display: flow-root;
   }
 
   .row {

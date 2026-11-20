@@ -72,6 +72,9 @@ Context menu placement:
 - Pitfall: placing or activating the window inside the actor's `first-frame` handler crashed GNOME Shell 50.1 (SIGABRT, `invalidate_top_window_actor_for_views: assertion failed: (!priv->frame_in_progress)`; GNOME then disables user extensions). `first-frame` is emitted while Mutter paints a frame, and any restack (`Main.activateWindow`, `make_above`) aborts there. Every restack from a paint-time signal goes through a `BEFORE_REDRAW` later.
 - GTK `set_opacity` cannot do this: it has no effect on Wayland.
 - `GetPointer` supplies the cursor and work area; the frontend positions inside the work area and calls `place_context_menu` (see `src/lib/components/features/context-menu/DOCS.md`).
+- Constant window height: the window is sized at open for the menu with the recent list open (closed menu + list block, the block measured by a hidden probe), and the list toggle never calls `setSize` or `place_context_menu`. A native resize on the toggle cut the list on expand and blanked the menu top on collapse (`docs/analyses/context-menu-list-toggle-flicker.md`).
+- Offset: the closed menu is drawn at `margin-top` = `closedOffset` (the shift `clamp_menu_origin` applied to the window, within the list block), 0 after an expand, so it stays at the pointer without moving the window.
+- Input region: the transparent strip around the menu must not take clicks, so the frontend sends `set_context_menu_input_region` (the bounding rectangle of the menu and open submenus) before `place_context_menu`, after every toggle, offset change and submenu open/close; Rust re-applies it after every show.
 
 Host-relative popups:
 - A window placed relative to a host gets the host as transient parent (`gnome_shell::set_transient_parent`, on the GTK main thread, on every open because the windows are shared by all hosts) and is placed with `place_window_on_parent`.
