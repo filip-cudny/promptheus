@@ -166,8 +166,10 @@ pub struct PillItem {
     pub preview: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thumbnail: Option<String>,
-    pub preview_width: u32,
-    pub preview_height: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview_width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview_height: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -306,7 +308,7 @@ struct Inner {
     scale: f64,
     #[cfg(target_os = "linux")]
     shell_scale: f64,
-    preview_sizes: Vec<(u32, u32)>,
+    preview_sizes: Vec<Option<(u32, u32)>>,
     grows_down: bool,
     overlay: Option<Overlay>,
     overlay_seq: u64,
@@ -573,8 +575,8 @@ pub fn pill_items(items: &[ContextItem]) -> Vec<PillItem> {
                 label,
                 preview,
                 thumbnail: None,
-                preview_width: 0,
-                preview_height: 0,
+                preview_width: None,
+                preview_height: None,
             }
         })
         .collect()
@@ -677,14 +679,12 @@ fn preview_sizes(
     context_items: &[ContextItem],
     scale: f64,
     pixel_size: impl Fn(&str) -> Option<(u32, u32)>,
-) -> Vec<(u32, u32)> {
+) -> Vec<Option<(u32, u32)>> {
     context_items
         .iter()
         .map(|item| match item {
-            ContextItem::Image { data, .. } => {
-                pixel_size(data).map_or((0, 0), |pixels| preview_display_size(pixels, scale))
-            }
-            ContextItem::Text { .. } => (0, 0),
+            ContextItem::Image { data, .. } => pixel_size(data).map(|pixels| preview_display_size(pixels, scale)),
+            ContextItem::Text { .. } => None,
         })
         .collect()
 }
@@ -707,7 +707,8 @@ fn attach_preview_sizes(
     let widget = app.state::<RecordingWidget>();
     let sizes = preview_sizes(context_items, preview_scale(inner, transport), |data| widget.pixel_sizes.get(data));
     for (item, size) in items.iter_mut().zip(&sizes) {
-        (item.preview_width, item.preview_height) = *size;
+        item.preview_width = size.map(|(width, _)| width);
+        item.preview_height = size.map(|(_, height)| height);
     }
     inner.preview_sizes = sizes;
 }
@@ -726,7 +727,15 @@ fn shell_items(items: Vec<PillItem>, context_items: &[ContextItem], image_paths:
                 ContextItem::Image { .. } => paths.next().unwrap_or_default(),
                 ContextItem::Text { .. } => String::new(),
             };
-            (item.index, item.kind, item.label, item.preview, image_path, item.preview_width, item.preview_height)
+            (
+                item.index,
+                item.kind,
+                item.label,
+                item.preview,
+                image_path,
+                item.preview_width.unwrap_or(0),
+                item.preview_height.unwrap_or(0),
+            )
         })
         .collect()
 }
@@ -2254,8 +2263,8 @@ mod tests {
                 label: "#1".into(),
                 preview: String::new(),
                 thumbnail: None,
-                preview_width: 0,
-                preview_height: 0,
+                preview_width: None,
+                preview_height: None,
             }
         );
     }
@@ -2463,25 +2472,26 @@ mod tests {
     }
 
     #[test]
-    fn display_sizes_are_zero_for_text_and_for_an_unreadable_image() {
+    fn display_sizes_are_absent_for_text_and_for_an_unreadable_image() {
         let image = |number, data: &str| ContextItem::Image { number, data: data.into(), media_type: "image/png".into() };
         let items = [numbered_text(1), image(1, "readable"), image(2, "broken")];
         let sizes = preview_sizes(&items, 1.0, |data| (data == "readable").then_some((200, 100)));
-        assert_eq!(sizes, [(0, 0), (200, 100), (0, 0)]);
+        assert_eq!(sizes, [None, Some((200, 100)), None]);
     }
 
     #[cfg(target_os = "linux")]
     #[test]
     fn the_shell_items_carry_the_display_sizes() {
-        let context_items = [numbered_text(1), numbered_image(1)];
+        let context_items = [numbered_text(1), numbered_image(1), numbered_image(2)];
         let mut items = pill_items(&context_items);
-        items[1].preview_width = 264;
-        items[1].preview_height = 149;
+        items[1].preview_width = Some(264);
+        items[1].preview_height = Some(149);
         assert_eq!(
-            shell_items(items, &context_items, vec!["/tmp/a.png".into()]),
+            shell_items(items, &context_items, vec!["/tmp/a.png".into(), "/tmp/b.png".into()]),
             [
                 (0, "text".into(), "#1".into(), "t".into(), String::new(), 0, 0),
                 (1, "image".into(), "#1".into(), String::new(), "/tmp/a.png".into(), 264, 149),
+                (2, "image".into(), "#2".into(), String::new(), "/tmp/b.png".into(), 0, 0),
             ]
         );
     }
@@ -2500,8 +2510,8 @@ mod tests {
                     label: "#1".into(),
                     preview: "hello".into(),
                     thumbnail: None,
-                    preview_width: 0,
-                    preview_height: 0,
+                    preview_width: None,
+                    preview_height: None,
                 },
                 PillItem {
                     index: 1,
@@ -2509,8 +2519,17 @@ mod tests {
                     label: "#1".into(),
                     preview: String::new(),
                     thumbnail: Some("data:image/png;base64,AAAA".into()),
-                    preview_width: 264,
-                    preview_height: 149,
+                    preview_width: Some(264),
+                    preview_height: Some(149),
+                },
+                PillItem {
+                    index: 2,
+                    kind: "image".into(),
+                    label: "#2".into(),
+                    preview: String::new(),
+                    thumbnail: None,
+                    preview_width: None,
+                    preview_height: None,
                 },
             ],
             item_rows: 2,
@@ -2531,9 +2550,7 @@ mod tests {
                         "index": 0,
                         "kind": "text",
                         "label": "#1",
-                        "preview": "hello",
-                        "previewWidth": 0,
-                        "previewHeight": 0
+                        "preview": "hello"
                     },
                     {
                         "index": 1,
@@ -2543,6 +2560,12 @@ mod tests {
                         "thumbnail": "data:image/png;base64,AAAA",
                         "previewWidth": 264,
                         "previewHeight": 149
+                    },
+                    {
+                        "index": 2,
+                        "kind": "image",
+                        "label": "#2",
+                        "preview": ""
                     }
                 ],
                 "itemRows": 2,

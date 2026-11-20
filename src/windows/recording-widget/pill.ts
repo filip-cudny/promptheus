@@ -14,8 +14,8 @@ export interface PillItem {
   label: string;
   preview: string;
   thumbnail?: string;
-  previewWidth: number;
-  previewHeight: number;
+  previewWidth?: number;
+  previewHeight?: number;
 }
 
 export interface PillModel {
