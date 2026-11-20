@@ -370,33 +370,6 @@
 
 <div class="root" style:--radius="{RADIUS}px">
   <div class="pill" class:mac={isMac} style:height="{pillHeight}px" style:padding="0 {PADDING_X}px" data-tauri-drag-region>
-    {#if hasItems}
-      <div class="items" style:height="{itemsHeight(model.itemRows)}px" style:gap="{ITEM_ROW_GAP}px" data-tauri-drag-region>
-        {#each imageLines as line}
-          <div class="image-line" style:gap="{ITEM_ROW_GAP}px" data-tauri-drag-region>
-            {#each line as item (item.index)}
-              <span class="chip image" style:gap="{IMAGE_CHIP_GAP}px" data-item-index={item.index}>
-                {#if item.thumbnail}
-                  <span class="thumb"><img src={item.thumbnail} alt="" /></span>
-                {:else}
-                  <ImageIcon size={12} />
-                {/if}
-                <span class="chip-number">{item.label}</span>
-                {@render removeButton(item)}
-              </span>
-            {/each}
-          </div>
-        {/each}
-        {#each textItems as item (item.index)}
-          <span class="chip text" style:gap="{CHIP_GAP}px" data-item-index={item.index}>
-            <Type size={12} />
-            <span class="chip-number">{item.label}</span>
-            <span class="chip-text">{chipText(item.preview)}</span>
-            {@render removeButton(item)}
-          </span>
-        {/each}
-      </div>
-    {/if}
     <div class="row stack" style:height="{ROW_HEIGHT}px" data-tauri-drag-region>
       {#if widgetState === "recording" || widgetState === "paused"}
         <div class="layer" out:swap data-tauri-drag-region>
@@ -519,6 +492,33 @@
         </button>
       </div>
     </div>
+    {#if hasItems}
+      <div class="items" style:height="{itemsHeight(model.itemRows)}px" style:gap="{ITEM_ROW_GAP}px" data-tauri-drag-region>
+        {#each imageLines as line}
+          <div class="image-line" style:gap="{ITEM_ROW_GAP}px" data-tauri-drag-region>
+            {#each line as item (item.index)}
+              <span class="chip image" style:gap="{IMAGE_CHIP_GAP}px" data-item-index={item.index}>
+                {#if item.thumbnail}
+                  <span class="thumb"><img src={item.thumbnail} alt="" /></span>
+                {:else}
+                  <ImageIcon size={12} />
+                {/if}
+                <span class="chip-number">{item.label}</span>
+                {@render removeButton(item)}
+              </span>
+            {/each}
+          </div>
+        {/each}
+        {#each textItems as item (item.index)}
+          <span class="chip text" style:gap="{CHIP_GAP}px" data-item-index={item.index}>
+            <Type size={12} />
+            <span class="chip-number">{item.label}</span>
+            <span class="chip-text">{chipText(item.preview)}</span>
+            {@render removeButton(item)}
+          </span>
+        {/each}
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -558,7 +558,7 @@
   .pill {
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
+    justify-content: flex-start;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
   }
 

@@ -43,13 +43,13 @@ const FLOOR_DB: f64 = -50.0;
 const CEIL_DB: f64 = -20.0;
 const LEVEL_ATTACK: f64 = 0.6;
 const LEVEL_RELEASE: f64 = 0.2;
-const BOTTOM_MARGIN: f64 = 24.0;
 const PILL_WIDTH: f64 = 264.0;
 const PREVIEW_MAX_WIDTH: f64 = PILL_WIDTH;
 const PREVIEW_MAX_HEIGHT: f64 = 160.0;
 const PREVIEW_MIN_BOX: u32 = 32;
 const PILL_HEIGHT: f64 = 72.0;
 const MAX_ITEM_ROWS: u32 = 3;
+const SHOW_RESERVED_ITEM_ROWS: u32 = 2;
 const ITEM_ROW_HEIGHT: f64 = 24.0;
 const ITEM_ROW_GAP: f64 = 4.0;
 const ITEMS_ROW_PADDING: f64 = 10.0;
@@ -317,7 +317,6 @@ struct Inner {
     #[cfg(target_os = "linux")]
     shell_scale: f64,
     preview_sizes: Vec<Option<(u32, u32)>>,
-    grows_down: bool,
     overlay: Option<Overlay>,
     overlay_seq: u64,
     #[cfg(target_os = "linux")]
@@ -480,32 +479,21 @@ pub fn anchored_origin(
     clamp_origin((x, y), size, work_area)
 }
 
-fn grows_down(settings: WidgetSettings) -> bool {
-    settings.at_cursor
-        && matches!(
-            settings.anchor,
-            PillAnchor::BelowRight | PillAnchor::BelowCenter | PillAnchor::BelowLeft
-        )
-}
-
 pub fn regrow_origin(
     origin: (f64, f64),
-    old_height: f64,
     new_height: f64,
     width: f64,
-    grows_down: bool,
     work_area: WorkArea,
 ) -> (f64, f64) {
-    let top = if grows_down {
-        origin.1
-    } else {
-        origin.1 + old_height - new_height
-    };
-    clamp_origin(
-        (origin.0, top),
-        (width, new_height),
-        work_area,
-    )
+    clamp_origin(origin, (width, new_height), work_area)
+}
+
+fn show_top_limit(work_area: WorkArea, scale: f64) -> f64 {
+    work_area.1 + work_area.3 - (PILL_HEIGHT + items_height(SHOW_RESERVED_ITEM_ROWS)) * scale
+}
+
+pub fn show_origin(origin: (f64, f64), work_area: WorkArea, scale: f64) -> (f64, f64) {
+    (origin.0, origin.1.min(show_top_limit(work_area, scale)))
 }
 
 pub fn dropdown_opens_up(pill_origin_y: f64, pill_height: f64, work_area: WorkArea) -> bool {
@@ -802,11 +790,11 @@ fn placement_origin(inner: &Inner) -> (i32, i32) {
         .map_or((0, 0), |p| (p.origin.0.round() as i32, p.origin.1.round() as i32))
 }
 
-fn default_origin(work_area: Rect, size: (u32, u32), scale: f64) -> (i32, i32) {
-    let (x, y, width, height) = work_area;
-    let left = x + (width as i32 - size.0 as i32) / 2;
-    let top = y + height as i32 - size.1 as i32 - (BOTTOM_MARGIN * scale) as i32;
-    (left, top)
+fn default_origin(work_area: Rect, width: u32, scale: f64) -> (i32, i32) {
+    let (x, y, area_width, area_height) = work_area;
+    let left = x + (area_width as i32 - width as i32) / 2;
+    let area = (x as f64, y as f64, area_width as f64, area_height as f64);
+    (left, show_top_limit(area, scale).round() as i32)
 }
 
 fn physical_size(logical: (f64, f64), scale: f64) -> (u32, u32) {
@@ -905,11 +893,11 @@ async fn show_in_shell(
     let (x, y, has_position) = if settings.at_cursor {
         let (px, py, work_x, work_y, work_width, work_height) =
             proxy.get_pointer().await.map_err(|e| e.to_string())?;
-        let (x, y) = anchored_origin(
-            (px as f64, py as f64),
-            size,
-            settings.anchor,
-            (work_x as f64, work_y as f64, work_width as f64, work_height as f64),
+        let work_area = (work_x as f64, work_y as f64, work_width as f64, work_height as f64);
+        let (x, y) = show_origin(
+            anchored_origin((px as f64, py as f64), size, settings.anchor, work_area),
+            work_area,
+            1.0,
         );
         (x.round() as i32, y.round() as i32, true)
     } else {
@@ -963,7 +951,6 @@ impl RecordingWidget {
                 #[cfg(target_os = "linux")]
                 shell_scale: 1.0,
                 preview_sizes: Vec::new(),
-                grows_down: false,
                 overlay: None,
                 overlay_seq: 0,
                 #[cfg(target_os = "linux")]
@@ -1011,7 +998,6 @@ impl RecordingWidget {
         {
             inner.shell_scale = 1.0;
         }
-        inner.grows_down = grows_down(settings);
         inner.state = WidgetState::Recording;
         inner.elapsed_ms = 0;
         inner.monochromatic = settings.monochromatic;
@@ -1236,7 +1222,7 @@ impl RecordingWidget {
                     let size = physical_size(logical_size, monitor.scale_factor());
                     let (x, y) = default_origin(
                         (work.position.x, work.position.y, work.size.width, work.size.height),
-                        size,
+                        size.0,
                         monitor.scale_factor(),
                     );
                     ((x as f64, y as f64), monitor, "default")
@@ -1255,6 +1241,7 @@ impl RecordingWidget {
         } else {
             clamp_origin(origin, size_f, work_area)
         };
+        let origin = show_origin(origin, work_area, scale);
         let origin = (origin.0.round(), origin.1.round());
         log_placement(source, settings.anchor, origin, (size.0 as f64, size.1 as f64), work_area);
         self.set_window_origin(&window, origin)?;
@@ -1295,18 +1282,15 @@ impl RecordingWidget {
     fn resize_locked(&self, app: &AppHandle, inner: &mut Inner, item_rows: u32) {
         drop_overlay(app, inner);
         let scale = inner.scale;
-        let (width, old_height) = pill_size(inner.item_rows);
-        let new_height = pill_size(item_rows).1;
+        let (width, new_height) = pill_size(item_rows);
         let old_rows = std::mem::replace(&mut inner.item_rows, item_rows);
         let Some(placement) = inner.placement.as_mut() else {
             return;
         };
         placement.origin = regrow_origin(
             placement.origin,
-            old_height * scale,
             new_height * scale,
             width * scale,
-            inner.grows_down,
             placement.work_area,
         );
         log::debug!(
@@ -1848,7 +1832,6 @@ mod tests {
             #[cfg(target_os = "linux")]
             shell_scale: 1.0,
             preview_sizes: Vec::new(),
-            grows_down: false,
             overlay: None,
             overlay_seq: 0,
             #[cfg(target_os = "linux")]
@@ -1991,35 +1974,40 @@ mod tests {
     }
 
     #[test]
-    fn regrow_keeps_the_bottom_edge() {
-        assert_eq!(
-            regrow_origin((100.0, 500.0), 80.0, 112.0, 240.0, false, (0.0, 0.0, 1920.0, 1040.0)),
-            (100.0, 468.0)
-        );
-    }
-
-    #[test]
-    fn regrow_from_one_to_three_rows_moves_up_by_the_difference() {
-        assert_eq!(
-            regrow_origin((100.0, 500.0), 112.0, 164.0, 240.0, false, (0.0, 0.0, 1920.0, 1040.0)),
-            (100.0, 448.0)
-        );
-    }
-
-    #[test]
-    fn regrow_is_clamped_to_the_work_area_top() {
-        assert_eq!(
-            regrow_origin((100.0, 10.0), 80.0, 112.0, 240.0, false, (0.0, 0.0, 1920.0, 1040.0)),
-            (100.0, 0.0)
-        );
-    }
-
-    #[test]
-    fn regrow_growing_down_keeps_the_top_edge() {
+    fn regrow_keeps_the_top_edge_when_the_pill_fits_below_it() {
         let area = (0.0, 0.0, 1920.0, 1040.0);
-        assert_eq!(regrow_origin((100.0, 500.0), 72.0, 106.0, 264.0, true, area), (100.0, 500.0));
-        assert_eq!(regrow_origin((100.0, 1000.0), 72.0, 106.0, 264.0, true, area), (100.0, 934.0));
-        assert_eq!(regrow_origin((100.0, 500.0), 72.0, 106.0, 264.0, false, area), (100.0, 466.0));
+        assert_eq!(regrow_origin((100.0, 500.0), 106.0, 264.0, area), (100.0, 500.0));
+        assert_eq!(regrow_origin((100.0, 10.0), 162.0, 264.0, area), (100.0, 10.0));
+    }
+
+    #[test]
+    fn regrow_past_the_work_area_bottom_moves_the_pill_up_just_enough() {
+        let area = (0.0, 0.0, 1920.0, 1040.0);
+        assert_eq!(regrow_origin((100.0, 1000.0), 106.0, 264.0, area), (100.0, 934.0));
+    }
+
+    #[test]
+    fn a_pill_at_the_default_origin_keeps_its_top_through_two_item_rows_and_moves_up_at_the_third() {
+        let area = (0.0, 0.0, 1920.0, 1040.0);
+        let (x, y) = default_origin((0, 0, 1920, 1040), 264, 1.0);
+        let origin = (x as f64, y as f64);
+        assert_eq!(regrow_origin(origin, pill_size(1).1, 264.0, area), origin);
+        assert_eq!(regrow_origin(origin, pill_size(2).1, 264.0, area), origin);
+        assert_eq!(regrow_origin(origin, pill_size(3).1, 264.0, area), (origin.0, origin.1 - 28.0));
+    }
+
+    #[test]
+    fn the_show_clamp_moves_a_pill_below_the_two_item_rows_top_up_to_it() {
+        let area = (0.0, 0.0, 1920.0, 1040.0);
+        assert_eq!(show_origin((100.0, 1000.0), area, 1.0), (100.0, 906.0));
+        assert_eq!(show_origin((100.0, 907.0), area, 1.0), (100.0, 906.0));
+        assert_eq!(show_origin((100.0, 906.0), area, 1.0), (100.0, 906.0));
+        assert_eq!(show_origin((100.0, 500.0), area, 1.0), (100.0, 500.0));
+        let retina = (0.0, 0.0, 3840.0, 2080.0);
+        assert_eq!(show_origin((200.0, 2000.0), retina, 2.0), (200.0, 1812.0));
+        assert_eq!(show_origin((200.0, 1000.0), retina, 2.0), (200.0, 1000.0));
+        let offset = (1920.0, 100.0, 1920.0, 1040.0);
+        assert_eq!(show_origin((2000.0, 1100.0), offset, 1.0), (2000.0, 1006.0));
     }
 
     #[test]
@@ -2619,9 +2607,9 @@ mod tests {
     }
 
     #[test]
-    fn default_origin_is_bottom_center_above_the_work_area_edge() {
-        assert_eq!(default_origin((0, 0, 1920, 1040), (240, 44), 1.0), (840, 972));
-        assert_eq!(default_origin((0, 0, 3840, 2080), (480, 88), 2.0), (1680, 1944));
+    fn default_origin_is_centered_with_its_top_at_the_two_item_rows_limit() {
+        assert_eq!(default_origin((0, 0, 1920, 1040), 264, 1.0), (828, 906));
+        assert_eq!(default_origin((0, 0, 3840, 2080), 528, 2.0), (1656, 1812));
     }
 
     #[test]

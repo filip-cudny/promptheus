@@ -61,7 +61,7 @@ const WIDGET_DROPDOWN_ROW_HEIGHT = 28;
 const WIDGET_DROPDOWN_PADDING = 4;
 const WIDGET_DROPDOWN_SEPARATOR_HEIGHT = 9;
 const WIDGET_DEFAULT_TARGET_LABEL = 'Dictation';
-const WIDGET_BOTTOM_MARGIN = 24;
+const WIDGET_SHOW_RESERVED_ITEM_ROWS = 2;
 const WIDGET_STATES = ['recording', 'paused', 'processing', 'done'];
 const WIDGET_BAR_MIN_HEIGHT = 4;
 const WIDGET_BAR_MAX_HEIGHT = 28;
@@ -115,14 +115,17 @@ function pointInRect(x, y, rect) {
     return x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
 }
 
+function widgetShowTopLimit(area) {
+    return area.y + area.height - WIDGET_HEIGHT - widgetItemsHeight(WIDGET_SHOW_RESERVED_ITEM_ROWS);
+}
+
 function resolveWidgetPosition(hasPosition, x, y, workAreas, pointerArea) {
-    if (hasPosition && workAreas.some(area => pointInRect(x, y, area)))
-        return {x, y, stored: true};
-    return {
-        x: Math.round(pointerArea.x + (pointerArea.width - WIDGET_WIDTH) / 2),
-        y: pointerArea.y + pointerArea.height - WIDGET_BOTTOM_MARGIN - WIDGET_HEIGHT,
-        stored: false,
-    };
+    const stored = hasPosition && workAreas.some(area => pointInRect(x, y, area));
+    const point = stored
+        ? {x, y}
+        : {x: Math.round(pointerArea.x + (pointerArea.width - WIDGET_WIDTH) / 2), y: widgetShowTopLimit(pointerArea)};
+    const area = workAreas.find(candidate => pointInRect(point.x, point.y, candidate)) ?? pointerArea;
+    return {x: point.x, y: Math.min(point.y, widgetShowTopLimit(area)), stored};
 }
 
 function workAreaIndexAt(x, y) {
@@ -1249,9 +1252,9 @@ export default class PromptheusExtension extends Extension {
         };
         widget.itemsRow.visible = false;
         widget.row2.style += ' spacing: 6px;';
-        actor.add_child(widget.itemsRow);
         actor.add_child(widget.row1);
         actor.add_child(widget.row2);
+        actor.add_child(widget.itemsRow);
         actor.connect('button-press-event', (_actor, event) => this._beginWidgetDrag(widget, event));
         Main.layoutManager.addTopChrome(actor);
         return widget;
