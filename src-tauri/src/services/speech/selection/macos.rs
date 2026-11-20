@@ -158,8 +158,8 @@ fn owner_frame_and_key(app: &AppHandle, owner: &Owner) -> (Rect, bool) {
 }
 
 fn pill_overlay_frame(app: &AppHandle, owner: &Owner) -> Rect {
-    let visible = app.state::<RecordingWidget>().overlay_visible();
-    if !matches!(owner, Owner::Pill { .. }) || !visible {
+    let dropdown_visible = app.state::<RecordingWidget>().dropdown_visible();
+    if !matches!(owner, Owner::Pill { .. }) || !dropdown_visible {
         return Rect::default();
     }
     owner_frame(app, OVERLAY_WINDOW_LABEL).map(|(frame, _)| frame).unwrap_or_default()

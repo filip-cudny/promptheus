@@ -47,7 +47,9 @@ const WIDGET_CHIP_SPACING = 4;
 const WIDGET_IMAGE_CHIP_SPACING = 5;
 const WIDGET_THUMB_SIZE = 20;
 const WIDGET_PREVIEW_MAX_HEIGHT = 160;
-const WIDGET_PREVIEW_GAP = 6;
+const WIDGET_POINTER_OFFSET_BELOW = 20;
+const WIDGET_POINTER_OFFSET_ABOVE = 6;
+const WIDGET_PREVIEW_MIN_BOX = 32;
 const WIDGET_PREVIEW_DELAY_MS = 300;
 const WIDGET_PREVIEW_PADDING = 8;
 const WIDGET_PREVIEW_FADE_HEIGHT = 36;
@@ -130,6 +132,14 @@ function workAreaIndexAt(x, y) {
 
 function workAreaAt(x, y) {
     return Main.layoutManager.getWorkAreaForMonitor(workAreaIndexAt(x, y));
+}
+
+function placeWidgetPopover(popover, width, height) {
+    const [pointerX, pointerY] = global.get_pointer();
+    const area = workAreaAt(pointerX, pointerY);
+    const x = Math.max(area.x, Math.min(pointerX, area.x + area.width - width));
+    const below = pointerY + WIDGET_POINTER_OFFSET_BELOW + height <= area.y + area.height;
+    popover.set_position(x, below ? pointerY + WIDGET_POINTER_OFFSET_BELOW : pointerY - WIDGET_POINTER_OFFSET_ABOVE - height);
 }
 
 function monitorScaleAt(x, y) {
@@ -1631,8 +1641,9 @@ export default class PromptheusExtension extends Extension {
         widget.itemsRow.visible = items.length > 0;
         widget.itemsRow.style = `height: ${widgetItemsContentHeight(itemRows)}px; padding: ${WIDGET_ITEMS_ROW_PADDING / 2}px ${WIDGET_PADDING_X}px;`;
         const grid = new St.BoxLayout({vertical: true, style: `spacing: ${WIDGET_ITEM_ROW_GAP}px;`});
-        const chipFor = ([index, kind, label, preview, imagePath]) => this._widgetChip(widget, kind, label, preview, imagePath,
-            () => this._emitRecordingWidgetItemRemoved(index, version), locked);
+        const chipFor = ([index, kind, label, preview, imagePath, displayWidth, displayHeight]) =>
+            this._widgetChip(widget, kind, label, preview, imagePath, [displayWidth, displayHeight],
+                () => this._emitRecordingWidgetItemRemoved(index, version), locked);
         const images = items.filter(item => item[1] === 'image');
         const texts = items.filter(item => item[1] === 'text');
         for (let start = 0; start < images.length; start += WIDGET_IMAGE_COLUMNS) {
@@ -1656,7 +1667,7 @@ export default class PromptheusExtension extends Extension {
         widget.itemsRow.add_child(scroll);
     }
 
-    _widgetChip(widget, kind, label, text, imagePath, onRemove, locked) {
+    _widgetChip(widget, kind, label, text, imagePath, displaySize, onRemove, locked) {
         const isImage = kind === 'image';
         const paddingLeft = isImage ? WIDGET_IMAGE_CHIP_PADDING_LEFT : WIDGET_CHIP_PADDING_LEFT;
         const paddingRight = isImage ? WIDGET_IMAGE_CHIP_PADDING_RIGHT : WIDGET_CHIP_PADDING_RIGHT;
@@ -1698,7 +1709,7 @@ export default class PromptheusExtension extends Extension {
         chip.add_child(removeButton);
         chip.connect('notify::hover', () => {
             if (chip.hover)
-                this._schedulePreview(widget, chip, text, imagePath);
+                this._schedulePreview(widget, chip, text, imagePath, displaySize);
             else
                 this._closePreview(widget);
         });
@@ -1715,30 +1726,35 @@ export default class PromptheusExtension extends Extension {
         });
     }
 
-    _schedulePreview(widget, chip, text, imagePath) {
+    _schedulePreview(widget, chip, text, imagePath, displaySize) {
         this._closePreview(widget);
         if (widget.dropdown || (!text && !imagePath))
             return;
         widget.previewId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, WIDGET_PREVIEW_DELAY_MS, () => {
             widget.previewId = 0;
-            this._showPreview(widget, text, imagePath);
+            this._showPreview(widget, text, imagePath, displaySize);
             return GLib.SOURCE_REMOVE;
         });
     }
 
-    _showPreview(widget, text, imagePath) {
+    _showPreview(widget, text, imagePath, displaySize) {
         if (widget.dropdown)
             return;
         const style = 'background-color: #252629; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; ' +
             'color: #e5e5e7; font-family: "Inter", "Noto Sans", sans-serif; font-size: 12px;';
         let popover;
         if (imagePath) {
+            const [displayWidth, displayHeight] = displaySize;
+            const sized = displayWidth > 0 && displayHeight > 0;
+            const boxWidth = sized ? Math.max(displayWidth, WIDGET_PREVIEW_MIN_BOX) : WIDGET_WIDTH;
+            const boxHeight = sized ? Math.max(displayHeight, WIDGET_PREVIEW_MIN_BOX) : WIDGET_PREVIEW_MAX_HEIGHT;
+            const backgroundSize = sized ? `${displayWidth}px ${displayHeight}px` : 'contain';
             popover = new St.Widget({
                 reactive: false,
-                style: `${style} background-image: url("file://${imagePath}"); background-size: contain; ` +
+                style: `${style} background-image: url("file://${imagePath}"); background-size: ${backgroundSize}; ` +
                     'background-position: center; background-repeat: no-repeat;',
             });
-            popover.set_size(WIDGET_WIDTH, WIDGET_PREVIEW_MAX_HEIGHT);
+            popover.set_size(boxWidth, boxHeight);
         } else {
             const label = new St.Label({
                 text,
@@ -1762,11 +1778,7 @@ export default class PromptheusExtension extends Extension {
                 popover.add_child(this._previewFade());
             popover.set_size(WIDGET_WIDTH, Math.min(natural, WIDGET_PREVIEW_MAX_HEIGHT));
         }
-        const {actor} = widget;
-        const y = this._dropdownAbove(widget)
-            ? actor.y - popover.height - WIDGET_PREVIEW_GAP
-            : actor.y + actor.height + WIDGET_PREVIEW_GAP;
-        popover.set_position(actor.x, y);
+        placeWidgetPopover(popover, popover.width, popover.height);
         if (!popover.get_parent())
             Main.layoutManager.uiGroup.add_child(popover);
         widget.preview = popover;
@@ -1797,7 +1809,7 @@ export default class PromptheusExtension extends Extension {
     _tooltipButton(widget, button, text) {
         button.connect('notify::hover', () => {
             if (button.hover)
-                this._scheduleTooltip(widget, button, text);
+                this._scheduleTooltip(widget, text);
             else
                 this._closeTooltip(widget);
         });
@@ -1805,23 +1817,23 @@ export default class PromptheusExtension extends Extension {
         return button;
     }
 
-    _scheduleTooltip(widget, button, text) {
+    _scheduleTooltip(widget, text) {
         this._closeTooltip(widget);
         if (widget.dropdown)
             return;
         const chained = GLib.get_monotonic_time() / 1000 - widget.tooltipHiddenAt <= WIDGET_TOOLTIP_CHAIN_MS;
         if (chained) {
-            this._showTooltip(widget, button, text);
+            this._showTooltip(widget, text);
             return;
         }
         widget.tooltipId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, WIDGET_TOOLTIP_DELAY_MS, () => {
             widget.tooltipId = 0;
-            this._showTooltip(widget, button, text);
+            this._showTooltip(widget, text);
             return GLib.SOURCE_REMOVE;
         });
     }
 
-    _showTooltip(widget, button, text) {
+    _showTooltip(widget, text) {
         const tooltip = new St.Bin({
             reactive: false,
             style: 'background-color: #252629; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; ' +
@@ -1831,15 +1843,8 @@ export default class PromptheusExtension extends Extension {
         });
         tooltip.set_height(WIDGET_TOOLTIP_HEIGHT);
         Main.layoutManager.uiGroup.add_child(tooltip);
-        const {actor} = widget;
-        const [buttonX] = button.get_transformed_position();
         const [, width] = tooltip.get_preferred_width(-1);
-        const centred = Math.round(buttonX + button.width / 2 - width / 2);
-        const x = Math.max(actor.x, Math.min(centred, actor.x + WIDGET_WIDTH - width));
-        const y = this._dropdownAbove(widget)
-            ? actor.y - WIDGET_TOOLTIP_HEIGHT - WIDGET_PREVIEW_GAP
-            : actor.y + actor.height + WIDGET_PREVIEW_GAP;
-        tooltip.set_position(x, y);
+        placeWidgetPopover(tooltip, width, WIDGET_TOOLTIP_HEIGHT);
         widget.tooltip = tooltip;
     }
 

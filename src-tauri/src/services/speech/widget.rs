@@ -31,8 +31,9 @@ pub const SHELL_POSITION_KEY: &str = "recording_widget.shell_position";
 const STATE_EVENT: &str = "recording-widget-state";
 const MODEL_EVENT: &str = "recording-widget-model";
 const OVERLAY_EVENT: &str = "recording-widget-overlay";
-const PREVIEW_FRAME_HEIGHT: f64 = 166.0;
-const TOOLTIP_FRAME_HEIGHT: f64 = 30.0;
+const POINTER_OFFSET_BELOW: f64 = 20.0;
+const POINTER_OFFSET_ABOVE: f64 = 6.0;
+const TOOLTIP_HEIGHT: f64 = 24.0;
 const DROPDOWN_CLOSED_EVENT: &str = "recording-widget-dropdown-closed";
 pub(super) const TICK: Duration = Duration::from_millis(50);
 const DONE_VISIBLE: Duration = Duration::from_secs(1);
@@ -60,6 +61,7 @@ const DROPDOWN_SEPARATOR_HEIGHT: f64 = 9.0;
 
 type Rect = (i32, i32, u32, u32);
 type WorkArea = (f64, f64, f64, f64);
+type Frame = ((f64, f64), (f64, f64));
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Placement {
@@ -224,9 +226,15 @@ impl OverlayKind {
 pub struct Overlay {
     pub kind: OverlayKind,
     pub up: bool,
-    pub height: f64,
+    pub frame: Frame,
     pub seq: u64,
     pub shown: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum OverlayAnchor {
+    Pill { logical_height: f64 },
+    Pointer { pointer: (f64, f64), popover: (f64, f64) },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -239,7 +247,8 @@ pub enum OverlayStep {
 pub struct OverlayPlan {
     pub seq: u64,
     pub up: bool,
-    pub frame: ((f64, f64), (f64, f64)),
+    pub frame: Frame,
+    pub offset_x: Option<f64>,
     pub step: OverlayStep,
     pub replaced: Option<OverlayKind>,
 }
@@ -248,7 +257,6 @@ pub struct OverlayPlan {
 pub struct OverlayContent {
     pub index: Option<u32>,
     pub text: Option<String>,
-    pub center_x: Option<f64>,
 }
 
 #[derive(Clone, Serialize)]
@@ -262,7 +270,7 @@ struct OverlayDescriptor {
     #[serde(skip_serializing_if = "Option::is_none")]
     text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    center_x: Option<f64>,
+    offset_x: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -321,30 +329,43 @@ impl Inner {
         self.transport.is_some() && self.generation == generation
     }
 
-    fn begin_overlay(&mut self, kind: OverlayKind, logical_height: f64) -> Result<OverlayPlan, String> {
+    fn begin_overlay(&mut self, kind: OverlayKind, anchor: OverlayAnchor) -> Result<OverlayPlan, String> {
         let placement = match (self.transport, self.placement) {
             (Some(Transport::Window), Some(placement)) => placement,
             _ => return Err("recording widget window is not shown".into()),
         };
-        let pill = physical_size(pill_size(self.item_rows), self.scale);
-        let pill = (pill.0 as f64, pill.1 as f64);
-        let up = dropdown_opens_up(placement.origin.1, pill.1, placement.work_area);
-        let height = logical_height * self.scale;
+        let (up, frame, offset_x) = match anchor {
+            OverlayAnchor::Pill { logical_height } => {
+                let pill = physical_size(pill_size(self.item_rows), self.scale);
+                let pill = (pill.0 as f64, pill.1 as f64);
+                let up = dropdown_opens_up(placement.origin.1, pill.1, placement.work_area);
+                let (origin, size) =
+                    overlay_frame(placement.origin, pill, logical_height * self.scale, up, placement.work_area);
+                (up, ((origin.0.round(), origin.1.round()), size), None)
+            }
+            OverlayAnchor::Pointer { pointer, popover } => {
+                let (origin, size, up) = popover_frame(pointer, popover, placement.work_area, self.scale);
+                let origin = (origin.0.round(), origin.1.round());
+                (up, (origin, size), Some((pointer.0 - origin.0) / self.scale))
+            }
+        };
         self.overlay_seq += 1;
         let seq = self.overlay_seq;
-        let (origin, size) = overlay_frame(placement.origin, pill, height, up, placement.work_area);
-        let frame = ((origin.0.round(), origin.1.round()), size);
         let current = self.overlay;
-        let in_place = current.is_some_and(|c| c.shown && c.kind == kind && c.up == up && c.height == height);
+        let in_place = current.is_some_and(|c| c.shown && c.kind == kind && c.up == up && c.frame == frame);
         let step = if in_place {
             OverlayStep::InPlace
         } else {
             OverlayStep::Reframe { hide: current.is_some_and(|c| c.shown) }
         };
-        let opened = Overlay { kind, up, height, seq, shown: in_place };
+        let opened = Overlay { kind, up, frame, seq, shown: in_place };
         let (overlay, replaced) = next_overlay(current, OverlayRequest::Open(opened));
         self.overlay = overlay;
-        Ok(OverlayPlan { seq, up, frame, step, replaced })
+        Ok(OverlayPlan { seq, up, frame, offset_x, step, replaced })
+    }
+
+    fn preview_size(&self, index: u32) -> Option<(u32, u32)> {
+        self.preview_sizes.get(index as usize).copied().flatten()
     }
 
     fn finish_overlay(&mut self, seq: u64) -> bool {
@@ -367,7 +388,7 @@ impl Inner {
 pub struct RecordingWidget {
     inner: Mutex<Inner>,
     move_seq: AtomicU64,
-    overlay_visible: AtomicBool,
+    dropdown_visible: AtomicBool,
     programmatic_origin: std::sync::Mutex<Option<(i32, i32)>>,
     thumbnails: super::pill_previews::ThumbnailCache,
     pixel_sizes: super::pill_previews::PixelSizeCache,
@@ -506,6 +527,32 @@ pub fn overlay_frame(
     let size = (pill_size.0, frame_height);
     let top = if up { pill_origin.1 - frame_height } else { pill_origin.1 + pill_size.1 };
     (clamp_origin((pill_origin.0, top), size, work_area), size)
+}
+
+pub fn popover_frame(
+    pointer: (f64, f64),
+    popover: (f64, f64),
+    work_area: WorkArea,
+    scale: f64,
+) -> ((f64, f64), (f64, f64), bool) {
+    let (left, top, width, height) = work_area;
+    let popover_width = popover.0 * scale;
+    let frame_size = (popover_width, (popover.1 + POINTER_OFFSET_ABOVE) * scale);
+    let x = left.max(pointer.0.min(left + width - popover_width));
+    let up = pointer.1 + (POINTER_OFFSET_BELOW + popover.1) * scale > top + height;
+    let y = if up {
+        pointer.1 - frame_size.1
+    } else {
+        pointer.1 + (POINTER_OFFSET_BELOW - POINTER_OFFSET_ABOVE) * scale
+    };
+    ((x, y), frame_size, up)
+}
+
+pub fn preview_popover_size(display: Option<(u32, u32)>) -> (f64, f64) {
+    display.map_or((PREVIEW_MAX_WIDTH, PREVIEW_MAX_HEIGHT), |display| {
+        let (width, height) = preview_box(display);
+        (width as f64, height as f64)
+    })
 }
 
 pub fn pill_targets(
@@ -923,7 +970,7 @@ impl RecordingWidget {
                 shell: None,
             }),
             move_seq: AtomicU64::new(0),
-            overlay_visible: AtomicBool::new(false),
+            dropdown_visible: AtomicBool::new(false),
             programmatic_origin: std::sync::Mutex::new(None),
             thumbnails: super::pill_previews::ThumbnailCache::default(),
             pixel_sizes: super::pill_previews::PixelSizeCache::default(),
@@ -934,8 +981,8 @@ impl RecordingWidget {
         self.inner.lock().await.transport.is_some()
     }
 
-    pub fn overlay_visible(&self) -> bool {
-        self.overlay_visible.load(Ordering::Relaxed)
+    pub fn dropdown_visible(&self) -> bool {
+        self.dropdown_visible.load(Ordering::Relaxed)
     }
 
     pub async fn show(&self, app: &AppHandle, session: u64) -> bool {
@@ -1328,8 +1375,8 @@ impl RecordingWidget {
     }
 
     pub async fn open_dropdown(&self, app: &AppHandle, rows: u32, separator: bool) -> Result<bool, String> {
-        let height = dropdown_height(rows, separator);
-        self.open_overlay(app, OverlayKind::Dropdown, height, OverlayContent::default()).await
+        let anchor = OverlayAnchor::Pill { logical_height: dropdown_height(rows, separator) };
+        self.open_overlay(app, OverlayKind::Dropdown, anchor, OverlayContent::default()).await
     }
 
     pub async fn open_preview(
@@ -1338,18 +1385,19 @@ impl RecordingWidget {
         index: Option<u32>,
         text: Option<String>,
     ) -> Result<bool, String> {
-        let content = OverlayContent { index, text, center_x: None };
-        self.open_overlay(app, OverlayKind::Preview, PREVIEW_FRAME_HEIGHT, content).await
+        let pointer = cursor_pointer(app)?;
+        let popover = match (&text, index) {
+            (None, Some(index)) => preview_popover_size(self.inner.lock().await.preview_size(index)),
+            _ => (PREVIEW_MAX_WIDTH, PREVIEW_MAX_HEIGHT),
+        };
+        let content = OverlayContent { index, text };
+        self.open_overlay(app, OverlayKind::Preview, OverlayAnchor::Pointer { pointer, popover }, content).await
     }
 
-    pub async fn open_tooltip(
-        &self,
-        app: &AppHandle,
-        text: Option<String>,
-        center_x: Option<f64>,
-    ) -> Result<bool, String> {
-        let content = OverlayContent { index: None, text, center_x };
-        self.open_overlay(app, OverlayKind::Tooltip, TOOLTIP_FRAME_HEIGHT, content).await
+    pub async fn open_tooltip(&self, app: &AppHandle, text: Option<String>) -> Result<bool, String> {
+        let anchor = OverlayAnchor::Pointer { pointer: cursor_pointer(app)?, popover: (PILL_WIDTH, TOOLTIP_HEIGHT) };
+        let content = OverlayContent { index: None, text };
+        self.open_overlay(app, OverlayKind::Tooltip, anchor, content).await
     }
 
     pub async fn close_dropdown(&self, app: &AppHandle) {
@@ -1368,11 +1416,11 @@ impl RecordingWidget {
         &self,
         app: &AppHandle,
         kind: OverlayKind,
-        logical_height: f64,
+        anchor: OverlayAnchor,
         content: OverlayContent,
     ) -> Result<bool, String> {
         let mut inner = self.inner.lock().await;
-        let plan = inner.begin_overlay(kind, logical_height)?;
+        let plan = inner.begin_overlay(kind, anchor)?;
         log::debug!(
             "recording widget: {kind:?} open up={} seq={} frame={:?} step={:?}",
             plan.up,
@@ -1392,7 +1440,7 @@ impl RecordingWidget {
             up: plan.up,
             index: content.index,
             text: content.text,
-            center_x: content.center_x,
+            offset_x: plan.offset_x.filter(|_| kind == OverlayKind::Tooltip),
         };
         if let Err(e) = app.emit_to(OVERLAY_WINDOW_LABEL, OVERLAY_EVENT, descriptor) {
             log::warn!("sending the overlay content failed: {e}");
@@ -1407,9 +1455,12 @@ impl RecordingWidget {
             return;
         }
         log::debug!("recording widget: overlay ack seq={seq}");
-        match reveal_overlay_window(app) {
+        let Some(kind) = inner.overlay.map(|overlay| overlay.kind) else {
+            return;
+        };
+        match reveal_overlay_window(app, kind) {
             Ok(()) => {
-                self.overlay_visible.store(true, Ordering::Relaxed);
+                self.dropdown_visible.store(kind == OverlayKind::Dropdown, Ordering::Relaxed);
                 log::debug!("recording widget: overlay reveal seq={seq}");
             }
             Err(e) => log::warn!("showing the recording widget overlay failed: {e}"),
@@ -1508,17 +1559,22 @@ fn overlay_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
         .ok_or_else(|| "recording-widget-overlay window not found".to_string())
 }
 
-fn set_overlay_visible(app: &AppHandle, visible: bool) {
-    app.state::<RecordingWidget>().overlay_visible.store(visible, Ordering::Relaxed);
+fn set_overlay_hidden(app: &AppHandle) {
+    let widget = app.state::<RecordingWidget>();
+    widget.dropdown_visible.store(false, Ordering::Relaxed);
+}
+
+fn cursor_pointer(app: &AppHandle) -> Result<(f64, f64), String> {
+    app.cursor_position().map(|p| (p.x, p.y)).map_err(|e| e.to_string())
 }
 
 #[cfg(target_os = "macos")]
-fn reveal_overlay_window(app: &AppHandle) -> Result<(), String> {
-    crate::services::macos_panel::reveal_overlay_panel(&overlay_window(app)?)
+fn reveal_overlay_window(app: &AppHandle, kind: OverlayKind) -> Result<(), String> {
+    crate::services::macos_panel::reveal_overlay_panel(&overlay_window(app)?, kind != OverlayKind::Dropdown)
 }
 
 #[cfg(not(target_os = "macos"))]
-fn reveal_overlay_window(app: &AppHandle) -> Result<(), String> {
+fn reveal_overlay_window(app: &AppHandle, _kind: OverlayKind) -> Result<(), String> {
     overlay_window(app)?.show().map_err(|e| e.to_string())
 }
 
@@ -1533,7 +1589,7 @@ fn conceal_overlay_window(app: &AppHandle) -> Result<(), String> {
 }
 
 fn conceal_overlay(app: &AppHandle) {
-    set_overlay_visible(app, false);
+    set_overlay_hidden(app);
     log::debug!("recording widget: overlay conceal");
     if let Err(e) = conceal_overlay_window(app) {
         log::warn!("hiding the recording widget overlay failed: {e}");
@@ -1572,7 +1628,7 @@ fn apply_overlay_frame(app: &AppHandle, origin: (f64, f64), size: (f64, f64), sc
             .ok()
             .flatten()
             .map_or(0.0, |m| m.size().height as f64 / m.scale_factor());
-        set_overlay_visible(app, false);
+        set_overlay_hidden(app);
         crate::services::macos_panel::prepare_overlay_frame(&window, origin, size, scale, primary_height_points)
     };
     #[cfg(not(target_os = "macos"))]
@@ -1995,7 +2051,7 @@ mod tests {
     }
 
     fn overlay(kind: OverlayKind) -> Overlay {
-        Overlay { kind, up: false, height: 10.0, seq: 0, shown: false }
+        Overlay { kind, up: false, frame: ((0.0, 0.0), (10.0, 10.0)), seq: 0, shown: false }
     }
 
     #[test]
@@ -2132,48 +2188,165 @@ mod tests {
         );
     }
 
+    fn popover_inner(scale: f64, work_area: WorkArea) -> Inner {
+        let mut inner = inner_with(Some(Transport::Window), 1, WidgetState::Recording);
+        inner.scale = scale;
+        inner.placement = Some(Placement { origin: (100.0, 600.0), work_area });
+        inner
+    }
+
+    fn pointer_anchor(pointer: (f64, f64), popover: (f64, f64)) -> OverlayAnchor {
+        OverlayAnchor::Pointer { pointer, popover }
+    }
+
+    const PREVIEW_POPOVER: (f64, f64) = (264.0, 160.0);
+    const TOOLTIP_POPOVER: (f64, f64) = (264.0, 24.0);
+
     #[test]
     fn overlay_transitions_follow_seq_and_ack_and_leave_the_pill_placement_unchanged() {
-        let placement = Placement { origin: (100.0, 600.0), work_area: OVERLAY_WORK_AREA };
-        let mut inner = inner_with(Some(Transport::Window), 1, WidgetState::Recording);
-        inner.placement = Some(placement);
-        let frame = ((100.0, 434.0), (264.0, 166.0));
+        let mut inner = popover_inner(1.0, OVERLAY_WORK_AREA);
+        let placement = inner.placement;
+        let frame = ((150.0, 634.0), (264.0, 166.0));
 
-        let plan = inner.begin_overlay(OverlayKind::Preview, 166.0).unwrap();
-        assert_eq!((plan.seq, plan.up, plan.frame), (1, true, frame));
+        let plan = inner.begin_overlay(OverlayKind::Preview, pointer_anchor((150.0, 620.0), PREVIEW_POPOVER)).unwrap();
+        assert_eq!((plan.seq, plan.up, plan.frame), (1, false, frame));
         assert_eq!(plan.step, OverlayStep::Reframe { hide: false });
         assert!(inner.finish_overlay(1));
         assert!(!inner.finish_overlay(1));
-        assert_eq!(inner.placement, Some(placement));
+        assert_eq!(inner.placement, placement);
 
-        let plan = inner.begin_overlay(OverlayKind::Preview, 166.0).unwrap();
+        let plan = inner.begin_overlay(OverlayKind::Preview, pointer_anchor((150.0, 620.0), PREVIEW_POPOVER)).unwrap();
         assert_eq!((plan.seq, plan.step), (2, OverlayStep::InPlace));
         assert!(inner.overlay.is_some_and(|overlay| overlay.shown));
-        assert_eq!(inner.placement, Some(placement));
+        assert_eq!(inner.placement, placement);
 
-        let plan = inner.begin_overlay(OverlayKind::Tooltip, 30.0).unwrap();
+        let plan = inner.begin_overlay(OverlayKind::Tooltip, pointer_anchor((150.0, 620.0), TOOLTIP_POPOVER)).unwrap();
         assert_eq!(plan.seq, 3);
         assert_eq!(plan.step, OverlayStep::Reframe { hide: true });
         assert_eq!(plan.replaced, Some(OverlayKind::Preview));
         assert!(!inner.finish_overlay(2));
         assert!(inner.finish_overlay(3));
-        assert_eq!(inner.placement, Some(placement));
+        assert_eq!(inner.placement, placement);
 
         assert_eq!(inner.end_overlay(OverlayKind::Preview), None);
         assert!(inner.overlay.is_some_and(|overlay| overlay.kind == OverlayKind::Tooltip));
         assert_eq!(inner.end_overlay(OverlayKind::Tooltip), Some(OverlayKind::Tooltip));
         assert_eq!(inner.overlay, None);
         assert!(!inner.finish_overlay(3));
-        assert_eq!(inner.placement, Some(placement));
+        assert_eq!(inner.placement, placement);
+    }
+
+    #[test]
+    fn a_second_preview_open_at_another_pointer_reframes() {
+        let mut inner = popover_inner(1.0, OVERLAY_WORK_AREA);
+        inner.begin_overlay(OverlayKind::Preview, pointer_anchor((150.0, 300.0), PREVIEW_POPOVER)).unwrap();
+        assert!(inner.finish_overlay(1));
+        let plan = inner.begin_overlay(OverlayKind::Preview, pointer_anchor((180.0, 330.0), PREVIEW_POPOVER)).unwrap();
+        assert_eq!(plan.step, OverlayStep::Reframe { hide: true });
+        assert_eq!(plan.frame, ((180.0, 344.0), (264.0, 166.0)));
+    }
+
+    #[test]
+    fn an_image_preview_of_another_box_size_at_the_same_pointer_reframes() {
+        let mut inner = popover_inner(1.0, OVERLAY_WORK_AREA);
+        inner.begin_overlay(OverlayKind::Preview, pointer_anchor((150.0, 300.0), (264.0, 149.0))).unwrap();
+        assert!(inner.finish_overlay(1));
+        let plan = inner.begin_overlay(OverlayKind::Preview, pointer_anchor((150.0, 300.0), (69.0, 160.0))).unwrap();
+        assert_eq!(plan.step, OverlayStep::Reframe { hide: true });
+        assert_eq!(plan.frame, ((150.0, 314.0), (69.0, 166.0)));
+    }
+
+    #[test]
+    fn the_same_open_twice_stays_in_place() {
+        let mut inner = popover_inner(1.0, OVERLAY_WORK_AREA);
+        let anchor = pointer_anchor((150.0, 300.0), TOOLTIP_POPOVER);
+        inner.begin_overlay(OverlayKind::Tooltip, anchor).unwrap();
+        assert!(inner.finish_overlay(1));
+        assert_eq!(inner.begin_overlay(OverlayKind::Tooltip, anchor).unwrap().step, OverlayStep::InPlace);
+    }
+
+    #[test]
+    fn a_dropdown_keeps_the_pill_edge_rule_while_a_preview_flips_at_the_pointer() {
+        let mut inner = popover_inner(1.0, OVERLAY_WORK_AREA);
+        inner.placement = Some(Placement { origin: (100.0, 100.0), work_area: OVERLAY_WORK_AREA });
+        let height = dropdown_height(3, true);
+        let plan = inner.begin_overlay(OverlayKind::Dropdown, OverlayAnchor::Pill { logical_height: height }).unwrap();
+        assert_eq!((plan.up, plan.frame, plan.offset_x), (false, ((100.0, 172.0), (264.0, 101.0)), None));
+        let plan = inner.begin_overlay(OverlayKind::Preview, pointer_anchor((150.0, 800.0), PREVIEW_POPOVER)).unwrap();
+        assert_eq!((plan.up, plan.frame), (true, ((150.0, 634.0), (264.0, 166.0))));
+    }
+
+    #[test]
+    fn the_tooltip_offset_is_the_pointer_inside_the_frame_in_css_pixels() {
+        let mut inner = popover_inner(1.0, OVERLAY_WORK_AREA);
+        let plan = inner.begin_overlay(OverlayKind::Tooltip, pointer_anchor((500.0, 300.0), TOOLTIP_POPOVER)).unwrap();
+        assert_eq!((plan.frame.0, plan.offset_x), ((500.0, 314.0), Some(0.0)));
+        let plan = inner.begin_overlay(OverlayKind::Tooltip, pointer_anchor((1400.0, 300.0), TOOLTIP_POPOVER)).unwrap();
+        assert_eq!((plan.frame.0, plan.offset_x), ((1176.0, 314.0), Some(224.0)));
+
+        let mut inner = popover_inner(2.0, (0.0, 0.0, 2880.0, 1800.0));
+        let plan = inner.begin_overlay(OverlayKind::Tooltip, pointer_anchor((1000.0, 600.0), TOOLTIP_POPOVER)).unwrap();
+        assert_eq!((plan.frame.0, plan.offset_x), ((1000.0, 628.0), Some(0.0)));
+        let plan = inner.begin_overlay(OverlayKind::Tooltip, pointer_anchor((2800.0, 600.0), TOOLTIP_POPOVER)).unwrap();
+        assert_eq!((plan.frame, plan.offset_x), (((2352.0, 628.0), (528.0, 60.0)), Some(224.0)));
+    }
+
+    #[test]
+    fn a_popover_below_the_pointer_starts_14_logical_px_under_it() {
+        assert_eq!(
+            popover_frame((500.0, 300.0), PREVIEW_POPOVER, OVERLAY_WORK_AREA, 1.0),
+            ((500.0, 314.0), (264.0, 166.0), false)
+        );
+        assert_eq!(
+            popover_frame((1000.0, 600.0), PREVIEW_POPOVER, (0.0, 0.0, 2880.0, 1800.0), 2.0),
+            ((1000.0, 628.0), (528.0, 332.0), false)
+        );
+    }
+
+    #[test]
+    fn a_popover_whose_bottom_would_pass_the_work_area_bottom_ends_at_the_pointer() {
+        assert_eq!(
+            popover_frame((500.0, 800.0), PREVIEW_POPOVER, OVERLAY_WORK_AREA, 1.0),
+            ((500.0, 634.0), (264.0, 166.0), true)
+        );
+        assert_eq!(
+            popover_frame((1000.0, 1600.0), PREVIEW_POPOVER, (0.0, 0.0, 2880.0, 1800.0), 2.0),
+            ((1000.0, 1268.0), (528.0, 332.0), true)
+        );
+        assert!(!popover_frame((500.0, 720.0), PREVIEW_POPOVER, OVERLAY_WORK_AREA, 1.0).2);
+        assert!(popover_frame((500.0, 721.0), PREVIEW_POPOVER, OVERLAY_WORK_AREA, 1.0).2);
+    }
+
+    #[test]
+    fn a_popover_is_shifted_left_at_the_work_area_right_edge() {
+        assert_eq!(popover_frame((1400.0, 300.0), PREVIEW_POPOVER, OVERLAY_WORK_AREA, 1.0).0, (1176.0, 314.0));
+        assert_eq!(
+            popover_frame((2800.0, 600.0), PREVIEW_POPOVER, (0.0, 0.0, 2880.0, 1800.0), 2.0).0,
+            (2352.0, 628.0)
+        );
+    }
+
+    #[test]
+    fn a_popover_is_never_left_of_the_work_area_left_edge() {
+        assert_eq!(popover_frame((50.0, 300.0), PREVIEW_POPOVER, (100.0, 0.0, 1440.0, 900.0), 1.0).0, (100.0, 314.0));
+        assert_eq!(popover_frame((50.0, 300.0), (2000.0, 24.0), OVERLAY_WORK_AREA, 1.0).0, (0.0, 314.0));
+    }
+
+    #[test]
+    fn an_image_preview_popover_is_its_box_or_the_full_preview_size_without_a_display_size() {
+        assert_eq!(preview_popover_size(Some((264, 149))), (264.0, 149.0));
+        assert_eq!(preview_popover_size(Some((264, 5))), (264.0, 32.0));
+        assert_eq!(preview_popover_size(None), (264.0, 160.0));
     }
 
     #[test]
     fn overlay_transitions_refuse_an_open_without_a_window_pill_or_placement() {
+        let anchor = pointer_anchor((150.0, 300.0), PREVIEW_POPOVER);
         let mut closed = inner_with(None, 1, WidgetState::Recording);
         closed.placement = Some(Placement { origin: (100.0, 600.0), work_area: OVERLAY_WORK_AREA });
-        assert!(closed.begin_overlay(OverlayKind::Preview, 166.0).is_err());
+        assert!(closed.begin_overlay(OverlayKind::Preview, anchor).is_err());
         let mut unplaced = inner_with(Some(Transport::Window), 1, WidgetState::Recording);
-        assert!(unplaced.begin_overlay(OverlayKind::Preview, 166.0).is_err());
+        assert!(unplaced.begin_overlay(OverlayKind::Preview, anchor).is_err());
     }
 
     #[test]

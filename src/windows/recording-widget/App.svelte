@@ -238,11 +238,10 @@
     if (dropdownOpen) return;
     const token = ++tooltipToken;
     const text = target.dataset.tooltip ?? "";
-    const rect = target.getBoundingClientRect();
     tooltipRequested = true;
     enqueuePreviewCall(async () => {
       if (token !== tooltipToken) return;
-      if (!(await openPopup("tooltip", { text, centerX: rect.left + rect.width / 2 }))) tooltipRequested = false;
+      if (!(await openPopup("tooltip", { text }))) tooltipRequested = false;
     });
   }
 

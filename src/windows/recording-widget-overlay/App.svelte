@@ -13,6 +13,7 @@
     PILL_WIDTH,
     PREVIEW_GAP,
     PREVIEW_MAX_HEIGHT,
+    PREVIEW_MIN_BOX,
     RADIUS,
     TARGET_ICON_GAP,
     TARGET_ICON_SIZE,
@@ -30,7 +31,7 @@
     up: boolean;
     index?: number;
     text?: string;
-    centerX?: number;
+    offsetX?: number;
   }
 
   type PreviewContent = { kind: "text"; text: string } | { kind: "image"; src: string };
@@ -54,6 +55,12 @@
   let hoveredButton: HTMLButtonElement | null = null;
   let contextItems: ContextItem[] | null = null;
   let unlisteners: UnlistenFn[] = [];
+
+  const imageDisplay = $derived.by(() => {
+    if (descriptor?.kind !== "preview" || descriptor.text != null) return null;
+    const item = model.items.find((candidate) => candidate.index === descriptor?.index);
+    return item?.previewWidth && item.previewHeight ? { width: item.previewWidth, height: item.previewHeight } : null;
+  });
 
   const separatorIndex = $derived(dropdownSeparatorIndex(model.targets));
   const dropdownHeight = $derived(
@@ -150,10 +157,9 @@
 
   $effect(() => {
     if (!tooltipElement || descriptor?.kind !== "tooltip") return;
-    const centerX = descriptor.centerX ?? 0;
+    const offsetX = descriptor.offsetX ?? 0;
     void descriptor.text;
-    const left = centerX - tooltipElement.offsetWidth / 2;
-    tooltipElement.style.left = `${Math.max(0, Math.min(left, PILL_WIDTH - tooltipElement.offsetWidth))}px`;
+    tooltipElement.style.left = `${Math.max(0, Math.min(offsetX, PILL_WIDTH - tooltipElement.offsetWidth))}px`;
   });
 
   onMount(async () => {
@@ -208,13 +214,22 @@
       bind:this={previewElement}
       class="preview"
       class:image={previewContent.kind === "image"}
+      class:fitted={imageDisplay}
       class:faded={previewOverflows}
       style:max-height="{PREVIEW_MAX_HEIGHT}px"
+      style:width={imageDisplay ? `${Math.max(imageDisplay.width, PREVIEW_MIN_BOX)}px` : undefined}
+      style:height={imageDisplay ? `${Math.max(imageDisplay.height, PREVIEW_MIN_BOX)}px` : undefined}
       style:margin-top={descriptor.up ? undefined : `${PREVIEW_GAP}px`}
       style:margin-bottom={descriptor.up ? `${PREVIEW_GAP}px` : undefined}
     >
       {#if previewContent.kind === "image"}
-        <img bind:this={imageElement} src={previewContent.src} alt="" />
+        <img
+          bind:this={imageElement}
+          src={previewContent.src}
+          alt=""
+          style:width={imageDisplay ? `${imageDisplay.width}px` : undefined}
+          style:height={imageDisplay ? `${imageDisplay.height}px` : undefined}
+        />
       {:else}
         {previewContent.text}
       {/if}
@@ -321,6 +336,17 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
+  }
+
+  .preview.fitted {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .preview.fitted img {
+    flex: none;
+    object-fit: fill;
   }
 
   .option {

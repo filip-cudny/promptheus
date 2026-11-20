@@ -278,9 +278,9 @@ pub fn prepare_overlay_frame(
     })
 }
 
-pub fn reveal_overlay_panel(window: &tauri::WebviewWindow) -> Result<(), String> {
-    run_overlay_closure(window, "reveal overlay panel", |ns_window| {
-        ns_window.setIgnoresMouseEvents(false);
+pub fn reveal_overlay_panel(window: &tauri::WebviewWindow, ignore_mouse: bool) -> Result<(), String> {
+    run_overlay_closure(window, "reveal overlay panel", move |ns_window| {
+        ns_window.setIgnoresMouseEvents(ignore_mouse);
         ns_window.setAlphaValue(1.0);
     })
 }

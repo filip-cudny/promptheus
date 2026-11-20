@@ -1246,15 +1246,14 @@ pub async fn set_recording_widget_tooltip(
     app: AppHandle,
     open: bool,
     text: Option<String>,
-    center_x: Option<f64>,
 ) -> crate::Result<&'static str> {
-    log::debug!("recording widget intent: tooltip open={open} center_x={center_x:?}");
+    log::debug!("recording widget intent: tooltip open={open}");
     let widget = app.state::<RecordingWidget>();
     if !open {
         widget.close_tooltip(&app).await;
         return Ok("down");
     }
-    let up = widget.open_tooltip(&app, text, center_x).await?;
+    let up = widget.open_tooltip(&app, text).await?;
     Ok(if up { "up" } else { "down" })
 }
 

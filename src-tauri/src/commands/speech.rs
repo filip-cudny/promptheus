@@ -73,9 +73,8 @@ pub async fn set_recording_widget_tooltip(
     app: AppHandle,
     open: bool,
     text: Option<String>,
-    center_x: Option<f64>,
 ) -> crate::Result<&'static str> {
-    session::set_recording_widget_tooltip(app, open, text, center_x).await
+    session::set_recording_widget_tooltip(app, open, text).await
 }
 
 #[tauri::command]
