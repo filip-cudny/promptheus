@@ -1,6 +1,7 @@
 <script lang="ts">
   import { openUrl } from "@tauri-apps/plugin-opener";
   import ContextSourceField from "$lib/components/features/context-editor/ContextSourceField.svelte";
+  import Button from "$lib/components/shared/ui/Button.svelte";
   import ImageChipBar from "$lib/components/shared/ui/ImageChipBar.svelte";
   import EditorToolbar from "$lib/components/shared/ui/EditorToolbar.svelte";
   import MarkdownRenderer from "$lib/components/shared/ui/MarkdownRenderer.svelte";
@@ -16,14 +17,22 @@
     editMode = $bindable(true),
     saving,
     errorMessage,
+    changedOutside,
     onSave,
+    onedit,
+    onReload,
+    onSaveMine,
   }: {
     text: string;
     images: ConversationImage[];
     editMode?: boolean;
     saving: boolean;
     errorMessage: string;
+    changedOutside: boolean;
     onSave: () => void;
+    onedit: () => void;
+    onReload: () => void;
+    onSaveMine: () => void;
   } = $props();
 
   let lineCount = $derived(text ? text.split("\n").length : 0);
@@ -33,6 +42,7 @@
   function addImage(image: ConversationImage) {
     const number = Math.max(0, ...images.map((existing) => existing.number ?? 0)) + 1;
     images = [...images, { ...image, number }];
+    onedit();
   }
 
   $effect(() => {
@@ -51,13 +61,20 @@
   {#if errorMessage}
     <span class="save-error">{errorMessage}</span>
   {/if}
+  {#if changedOutside}
+    <div class="outside-bar" role="status">
+      <span>Context changed outside the editor</span>
+      <Button onclick={onReload}>Reload</Button>
+      <Button onclick={onSaveMine}>Save mine</Button>
+    </div>
+  {/if}
   {#if images.length > 0}
     <div class="image-row">
-      <ImageChipBar bind:images readonly={!editMode} onopen={(image) => openImagePreview(image.data, image.media_type)} />
+      <ImageChipBar bind:images={() => images, (next) => { images = next; onedit(); }} readonly={!editMode} onopen={(image) => openImagePreview(image.data, image.media_type)} />
     </div>
   {/if}
   {#if editMode}
-    <ContextSourceField bind:value={text} onimage={addImage} />
+    <ContextSourceField bind:value={() => text, (next) => { text = next; onedit(); }} onimage={addImage} />
   {:else}
     <div class="markdown-view">
       {#if previewItems.length >= 2}
@@ -111,6 +128,20 @@
   .item-label {
     font-size: var(--font-size-sm);
     color: var(--text-muted);
+  }
+
+  .outside-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    background: var(--warning-bg-soft);
+    color: var(--warning-text);
+    font-size: var(--font-size-sm);
+  }
+
+  .outside-bar span {
+    flex: 1;
   }
 
   .save-error {

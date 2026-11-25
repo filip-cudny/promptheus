@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import ContextEditorView from "$lib/components/features/context-editor/ContextEditorView.svelte";
   import { useContextLoadSave } from "$lib/components/features/context-editor/drivers/useContextLoadSave.svelte";
+  import { useOutsideContextChange } from "$lib/components/features/context-editor/drivers/useOutsideContextChange.svelte";
   import type { ConversationImage } from "$lib/types/conversation";
 
   const ctx = useContextLoadSave();
@@ -10,22 +11,25 @@
   let images = $state<ConversationImage[]>([]);
   let editMode = $state(true);
 
-  async function reload() {
-    const loaded = await ctx.load();
-    text = loaded.text;
-    images = loaded.images;
-  }
+  const outside = useOutsideContextChange(ctx, {
+    read: () => ({ text, images }),
+    write: (loaded) => {
+      text = loaded.text;
+      images = loaded.images;
+    },
+  });
 
-  async function save() {
-    if (await ctx.save(text, images)) await reload();
-  }
-
-  onMount(reload);
+  onMount(() => {
+    const started = outside.start();
+    return () => {
+      started.then((stop) => stop());
+    };
+  });
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      if (!ctx.saving) save();
+      if (!ctx.saving) outside.save();
     }
   }
 </script>
@@ -39,7 +43,11 @@
     bind:editMode
     saving={ctx.saving}
     errorMessage={ctx.errorMessage}
-    onSave={save}
+    changedOutside={outside.changedOutside}
+    onSave={outside.save}
+    onedit={outside.markEdited}
+    onReload={outside.reload}
+    onSaveMine={outside.saveMine}
   />
 </div>
 
