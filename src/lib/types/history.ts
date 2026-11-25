@@ -2,7 +2,7 @@ export type HistoryEntryType = "speech" | "text";
 
 export type InvocationSource = "context_menu" | "alternative_execute" | "chat" | "pill";
 
-import type { AppliedSkill, NodeUpdate, ToolCall } from "$lib/types/ai";
+import type { AppliedSkill, NodeUpdate, Source, ToolCall } from "$lib/types/ai";
 import type { ConversationImage } from "$lib/types/conversation";
 
 export interface SerializedConversationNode {
@@ -23,6 +23,7 @@ export interface SerializedConversationNode {
   cancelled?: boolean;
   tool_calls?: ToolCall[];
   applied_skills?: AppliedSkill[];
+  sources?: Source[];
 }
 
 export interface ConversationHistoryData {

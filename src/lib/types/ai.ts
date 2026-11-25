@@ -28,13 +28,18 @@ export interface ToolCall {
   completed_at: string | null;
 }
 
+export interface Source {
+  url: string;
+  title: string;
+}
+
 export type NodeUpdate =
   | { type: "environment"; value: string }
   | { type: "context"; content: string; reason: string; image_refs: string[] };
 
 export type StreamEvent =
   | { event: "chunk"; data: { delta: string; accumulated: string; thinking_delta: string | null; accumulated_thinking: string | null } }
-  | { event: "done"; data: { full_text: string; full_thinking: string | null; prompt_tokens: number | null; completion_tokens: number | null } }
+  | { event: "done"; data: { full_text: string; full_thinking: string | null; prompt_tokens: number | null; completion_tokens: number | null; sources: Source[] } }
   | { event: "error"; data: { message: string } }
   | { event: "node_updates"; data: { node_id: string; updates: NodeUpdate[] } }
   | { event: "tool_call_start"; data: { tool_call: ToolCall } }

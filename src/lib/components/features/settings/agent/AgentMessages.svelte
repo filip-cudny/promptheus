@@ -5,6 +5,7 @@
   import { getSettingsAgent } from "$lib/stores/settingsAgent.svelte";
   import ToolCallGroup from "$lib/components/features/conversation-dialog/tool-call/ToolCallGroup.svelte";
   import ThinkingBlock from "$lib/components/shared/ui/ThinkingBlock.svelte";
+  import SourceList from "$lib/components/shared/ui/SourceList.svelte";
   import ProcessingIndicator from "$lib/components/features/conversation-dialog/components/ProcessingIndicator.svelte";
   import SecretField from "../SecretField.svelte";
   import ProposalCard from "./ProposalCard.svelte";
@@ -139,6 +140,7 @@
                   {/if}
                 {/if}
               {/each}
+              <SourceList sources={message.sources} onopen={open} />
               {#each message.secretViews as name, view (view)}
                 <SecretField {name} readonly />
               {/each}

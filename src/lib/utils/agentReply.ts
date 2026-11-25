@@ -1,4 +1,4 @@
-import type { StreamEvent, ToolCall } from "$lib/types/ai";
+import type { Source, StreamEvent, ToolCall } from "$lib/types/ai";
 
 export interface AgentReply {
   text: string;
@@ -8,10 +8,11 @@ export interface AgentReply {
   isThinking: boolean;
   iterationText: string;
   secretViews: string[];
+  sources: Source[];
 }
 
 export function emptyReply(): AgentReply {
-  return { text: "", toolCalls: [], thinkingParts: [], thinking: null, isThinking: false, iterationText: "", secretViews: [] };
+  return { text: "", toolCalls: [], thinkingParts: [], thinking: null, isThinking: false, iterationText: "", secretViews: [], sources: [] };
 }
 
 export function applyStreamEvent(reply: AgentReply, event: StreamEvent) {
@@ -44,6 +45,7 @@ export function applyStreamEvent(reply: AgentReply, event: StreamEvent) {
     case "done":
       reply.text = event.data.full_text;
       if (event.data.full_thinking != null) reply.thinking = event.data.full_thinking;
+      reply.sources = event.data.sources ?? [];
       reply.isThinking = false;
       break;
   }

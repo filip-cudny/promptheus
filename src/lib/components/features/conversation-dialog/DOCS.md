@@ -31,6 +31,8 @@ Files whose role does not follow from the name:
 - Composer tool toggle (`InputArea` → `store.toggleTool`) updates the tab's `selected_tools` and writes only that name with `setSurfaceTool("chat", id, enabled)` (`set_surface_tool`), so a change made in Settings meanwhile is not overwritten.
 - `drivers/useInputSync.svelte.ts` — local↔store sync for text/images/text attachments (see "Input sync"); `drivers/useSidebarMutex.svelte.ts` — see "Sidebar mutex".
 
+`AssistantBubble` shows the node's `sources` (web search citations the provider reported, `Source { url, title }`) as a `SourceList` under the reply text, before the error banner, hidden in edit mode and when empty. They arrive with the `done` event, after `tryReconnect` from the execution snapshot, are saved with the node (`SerializedConversationNode.sources`) and read back as `[]` from a history entry without the field.
+
 ## Layer contracts
 
 - `components/*` and `$lib/components/shared/ui/*` **must not** import `services/`, `stores/`, or `invoke()`. Take props, emit callbacks.

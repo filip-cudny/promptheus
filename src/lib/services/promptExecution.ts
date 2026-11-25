@@ -1,6 +1,7 @@
 import { invoke, Channel } from "@tauri-apps/api/core";
 import type {
   AppliedSkill,
+  Source,
   StreamEvent,
   ConversationNodeForExecution,
   ToolCall,
@@ -17,7 +18,7 @@ export interface TokenUsageData {
 
 export interface ExecutionCallbacks {
   onChunk: (delta: string, accumulated: string, thinkingDelta: string | null, accumulatedThinking: string | null) => void;
-  onDone: (fullText: string, usage?: TokenUsageData, fullThinking?: string | null) => void;
+  onDone: (fullText: string, usage?: TokenUsageData, fullThinking?: string | null, sources?: Source[]) => void;
   onError: (message: string) => void;
   onNodeUpdates?: (nodeId: string, updates: NodeUpdate[]) => void;
   onToolCallStart?: (toolCall: ToolCall) => void;
@@ -34,7 +35,7 @@ function routeStreamEvent(callbacks: ExecutionCallbacks): (event: StreamEvent) =
         callbacks.onDone(event.data.full_text, {
           prompt_tokens: event.data.prompt_tokens,
           completion_tokens: event.data.completion_tokens,
-        }, event.data.full_thinking);
+        }, event.data.full_thinking, event.data.sources);
         break;
       case "error":
         callbacks.onError(event.data.message);
@@ -135,6 +136,7 @@ export interface ExecutionSnapshot {
   error: string | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
+  sources: Source[];
 }
 
 export async function reconnectToExecution(

@@ -1,4 +1,4 @@
-import type { AppliedSkill, NodeUpdate, ToolCall } from "$lib/types/ai";
+import type { AppliedSkill, NodeUpdate, Source, ToolCall } from "$lib/types/ai";
 import type { InvocationSource } from "$lib/types/history";
 
 export interface ConversationNode {
@@ -20,6 +20,7 @@ export interface ConversationNode {
   cancelled: boolean;
   tool_calls: ToolCall[];
   applied_skills: AppliedSkill[];
+  sources: Source[];
 }
 
 export interface ConversationImage {

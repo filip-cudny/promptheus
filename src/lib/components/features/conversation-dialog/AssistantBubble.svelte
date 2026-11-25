@@ -8,6 +8,7 @@
   import ActionIconButton from "$lib/components/shared/ui/ActionIconButton.svelte";
   import MarkdownRenderer from "$lib/components/shared/ui/MarkdownRenderer.svelte";
   import ThinkingBlock from "$lib/components/shared/ui/ThinkingBlock.svelte";
+  import SourceList from "$lib/components/shared/ui/SourceList.svelte";
   import ToolCallGroup from "./tool-call/ToolCallGroup.svelte";
   import ProcessingIndicator from "./components/ProcessingIndicator.svelte";
   import ErrorBanner from "./components/ErrorBanner.svelte";
@@ -153,6 +154,10 @@
         {/each}
       {:else if displayContent}
         <MarkdownRenderer content={displayContent} {isStreaming} onopen={openUrl} onsavesvg={saveSvg} />
+      {/if}
+
+      {#if !editMode}
+        <SourceList sources={node.sources ?? []} onopen={openUrl} />
       {/if}
 
       {#if showGenerating}

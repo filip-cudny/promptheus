@@ -116,6 +116,7 @@ export function createNode(
     cancelled: false,
     tool_calls: [],
     applied_skills: [],
+    sources: [],
   };
 }
 
@@ -243,6 +244,7 @@ function serializeNodes(
     cancelled: node.cancelled,
     tool_calls: node.tool_calls,
     applied_skills: node.applied_skills,
+    sources: node.sources,
   }));
 }
 
@@ -462,7 +464,7 @@ export function createConversationStore(
             assistantNode.thinking_duration = Math.floor((Date.now() - tab.thinking_started_at) / 1000);
           }
         },
-        onDone: (fullText, usage, fullThinking) => {
+        onDone: (fullText, usage, fullThinking, sources) => {
           console.log("[DEBUG] onDone", {
             hasMarkers: /\{\{tool_call:/.test(fullText),
             toolCalls: assistantNode.tool_calls.map((tc) => ({ id: tc.tool_call_id, status: tc.status, hasResult: !!tc.result, hasError: !!tc.error, argKeys: Object.keys(tc.arguments) })),
@@ -470,6 +472,7 @@ export function createConversationStore(
           });
           assistantNode.content = fullText;
           assistantNode.thinking = fullThinking ?? null;
+          assistantNode.sources = sources ?? [];
           if (tab.thinking_started_at && !assistantNode.thinking_duration) {
             assistantNode.thinking_duration = Math.floor((Date.now() - tab.thinking_started_at) / 1000);
           }
@@ -611,10 +614,11 @@ export function createConversationStore(
           assistantNode.thinking_duration = Math.floor((Date.now() - tab.thinking_started_at) / 1000);
         }
       },
-      onDone: (fullText, usage, fullThinking) => {
+      onDone: (fullText, usage, fullThinking, sources) => {
         if (!assistantNode) return;
         assistantNode.content = fullText;
         assistantNode.thinking = fullThinking ?? null;
+        assistantNode.sources = sources ?? [];
         if (tab.thinking_started_at && !assistantNode.thinking_duration) {
           assistantNode.thinking_duration = Math.floor((Date.now() - tab.thinking_started_at) / 1000);
         }
@@ -698,6 +702,7 @@ export function createConversationStore(
 
     assistantNode = createNode("assistant", snapshot.accumulated_text, userNode.node_id);
     assistantNode.tool_calls = snapshot.tool_calls;
+    assistantNode.sources = snapshot.sources;
     tab.tree.nodes.set(assistantNode.node_id, assistantNode);
     userNode.children.push(assistantNode.node_id);
     tab.tree.current_path.push(assistantNode.node_id);
@@ -1411,6 +1416,7 @@ export function createConversationStore(
             cancelled: serialized.cancelled ?? false,
             tool_calls: serialized.tool_calls ?? [],
             applied_skills: serialized.applied_skills ?? [],
+            sources: serialized.sources ?? [],
           });
         }
       } else if (entry.input_preview) {
@@ -1440,6 +1446,7 @@ export function createConversationStore(
           cancelled: false,
           tool_calls: [],
           applied_skills: [],
+          sources: [],
         });
 
         if (entry.output_preview) {
@@ -1463,6 +1470,7 @@ export function createConversationStore(
             cancelled: false,
             tool_calls: [],
             applied_skills: [],
+            sources: [],
           });
         }
       }

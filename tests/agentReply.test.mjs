@@ -124,3 +124,29 @@ test("showsProcessing is false while thinking", () => {
 test("showsProcessing is false when not running", () => {
   assert.strictEqual(showsProcessing(emptyReply(), false), false);
 });
+
+test("emptyReply has no sources", () => {
+  assert.deepStrictEqual(emptyReply().sources, []);
+});
+
+test("done leaves its sources on the reply in order", () => {
+  const reply = emptyReply();
+  const sources = [
+    { url: "https://a.example", title: "A" },
+    { url: "https://b.example", title: "B" },
+  ];
+  applyStreamEvent(reply, {
+    event: "done",
+    data: { full_text: "x", full_thinking: null, prompt_tokens: null, completion_tokens: null, sources },
+  });
+  assert.deepStrictEqual(reply.sources, sources);
+});
+
+test("done without the sources key leaves no sources", () => {
+  const reply = emptyReply();
+  applyStreamEvent(reply, {
+    event: "done",
+    data: { full_text: "x", full_thinking: null, prompt_tokens: null, completion_tokens: null },
+  });
+  assert.deepStrictEqual(reply.sources, []);
+});

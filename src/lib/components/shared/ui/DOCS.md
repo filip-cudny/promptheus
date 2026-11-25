@@ -197,6 +197,11 @@ Lives in `shared/widgets/ContextEditor.svelte` (it calls `openImagePreview` from
 - `variant="window"` is for separate Tauri windows with transparent body (e.g. Cmd+P provider switcher) — keeps the scrim transparent so the host window itself acts as the backdrop. On Linux this variant uses a lighter shadow (`--shadow-lg-linux`) because GTK transparent windows render heavy shadows poorly; the overlay variant keeps `--shadow-lg` on every platform.
 - Provides utility classes for consumers: `.palette-item`, `.palette-item.highlight`, `.palette-item-icon`, `.palette-item-name`, `.palette-empty`, `.palette-divider`, plus `.palette-footer kbd` styling.
 
+### SourceList
+
+- Props `sources: Source[]` and `onopen(url)`. Renders nothing for an empty list, otherwise a "Sources" heading and one link per source (text = `title`, `title` attribute = `url`, colour `--syntax-link` like links in `MarkdownRenderer`). A click calls `preventDefault` and `onopen(url)`; the consumer opens the system browser (`openUrl`), the webview never navigates.
+- Used under the reply text by `AssistantBubble` and `AgentMessages`.
+
 ### MarkdownRenderer
 
 - `onopen` and `onsavesvg` are optional callbacks (open a link, save a Mermaid SVG).
