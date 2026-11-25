@@ -43,6 +43,7 @@ export function useOutsideContextChange(ctx: ContextLoadSave, fields: EditorFiel
 
   async function reloadFromBar() {
     changedOutside = false;
+    dirty = false;
     await reload();
   }
 
