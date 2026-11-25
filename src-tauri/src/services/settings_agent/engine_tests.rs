@@ -657,6 +657,33 @@ async fn reasoning_item_of_a_tool_round_goes_back_on_the_assistant_message() {
 }
 
 #[tokio::test]
+async fn text_replay_item_of_a_tool_round_goes_back_on_the_assistant_message() {
+    let item = json!({"role": "assistant", "content": "Fact .\n\nSources:\n- A: https://a.example"});
+    let script = vec![
+        MockReply::ReasoningThenToolCalls {
+            reasoning_item: item.clone(),
+            calls: vec![("c1".into(), "settings_read".into(), json!({}))],
+        },
+        MockReply::Text("done".into()),
+    ];
+
+    let run = run(Some("env-model"), script).await;
+
+    run.outcome.as_ref().unwrap();
+    let requests = run.requests.lock().unwrap();
+    let second: Value = serde_json::from_str(&requests[1]).unwrap();
+    let with_items: Vec<&Value> = second["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m.get("reasoning_items").is_some())
+        .collect();
+    assert_eq!(with_items.len(), 1);
+    assert_eq!(with_items[0]["role"], "assistant");
+    assert_eq!(with_items[0]["reasoning_items"], json!([item]));
+}
+
+#[tokio::test]
 async fn reaching_the_tool_round_limit_ends_the_turn_with_the_last_tool_error() {
     let bad_row = json!({"operations": [{"op": "delete_model", "id": "ghost-id"}]});
     let script = (0..=MAX_TOOL_LOOP_ITERATIONS)

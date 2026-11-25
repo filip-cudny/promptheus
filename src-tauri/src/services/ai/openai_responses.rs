@@ -266,6 +266,8 @@ struct StreamState {
     accumulated: String,
     open_span: Option<String>,
     sources: Vec<Source>,
+    message_text: String,
+    message_sources: Vec<Source>,
     accumulated_thinking: String,
     active_tool_call_ids: Vec<String>,
     fn_call_args: HashMap<String, (String, String)>,
@@ -318,17 +320,41 @@ impl StreamState {
                 .filter(|v| !v.is_empty())
         };
         let Some(url) = text("url") else { return };
-        if self.sources.iter().any(|s| s.url == url) {
-            return;
-        }
         let source = Source {
             url: url.to_string(),
             title: text("title").unwrap_or(url).to_string(),
         };
+        if !self.message_sources.iter().any(|s| s.url == url) {
+            self.message_sources.push(source.clone());
+        }
+        if self.sources.iter().any(|s| s.url == url) {
+            return;
+        }
         log::debug!("responses: url_citation source added");
         self.sources.push(source.clone());
         self.pending_chunks
             .push_back(StreamChunk::source(&self.accumulated, source));
+    }
+
+    fn push_message_replay_item(&mut self) {
+        let text = std::mem::take(&mut self.message_text);
+        let sources = std::mem::take(&mut self.message_sources);
+        if text.trim().is_empty() {
+            return;
+        }
+        let mut content = text;
+        if !sources.is_empty() {
+            content.push_str("\n\nSources:");
+            for source in &sources {
+                content.push_str(&format!("\n- {}: {}", source.title, source.url));
+            }
+        }
+        log::debug!(
+            "responses: message replay item kept, chars={}, sources={}",
+            content.chars().count(),
+            sources.len()
+        );
+        self.push_reasoning_item(serde_json::json!({"role": "assistant", "content": content}));
     }
 
     fn push_tool_event(&mut self, event: ToolCallEvent) {
@@ -411,6 +437,7 @@ fn process_event(state: &mut StreamState, event: ResponseEvent) {
                 return;
             }
             state.accumulated.push_str(&delta);
+            state.message_text.push_str(&delta);
             state.push_content(delta, None);
         }
         "response.output_text.done" => state.drop_open_span(),
@@ -499,6 +526,7 @@ fn process_event(state: &mut StreamState, event: ResponseEvent) {
                     }
                     state.complete_function_call(tool_call_id, item.name, item.arguments);
                 }
+                Some("message") => state.push_message_replay_item(),
                 _ => {}
             }
         }
@@ -979,6 +1007,108 @@ mod tests {
             vec![
                 Source { url: "https://a.example/x".into(), title: "A".into() },
                 Source { url: "https://b.example".into(), title: "https://b.example".into() },
+            ]
+        );
+    }
+
+    const MESSAGE_ADDED: &str = r#"{"type":"response.output_item.added","item":{"type":"message","id":"msg_1","role":"assistant"}}"#;
+    const MESSAGE_DONE: &str = r#"{"type":"response.output_item.done","item":{"type":"message","id":"msg_1","role":"assistant","content":[]}}"#;
+
+    fn replayed_items(chunks: &[StreamChunk]) -> Vec<serde_json::Value> {
+        chunks.iter().filter_map(|c| c.reasoning_item.clone()).collect()
+    }
+
+    #[tokio::test]
+    async fn message_text_with_sources_is_replayed_in_stream_order_among_reasoning_items() {
+        use crate::models::capabilities::ModelCapabilities;
+
+        let citation = r#"{"type":"response.output_text.annotation.added","item_id":"msg_1","output_index":3,"content_index":0,"annotation_index":0,"annotation":{"type":"url_citation","url":"https://a.example","title":"A","start_index":0,"end_index":5}}"#;
+        let chunks = run(&[
+            r#"{"type":"response.output_item.done","item":{"type":"reasoning","id":"rs_1","summary":[]}}"#,
+            r#"{"type":"response.output_item.added","item":{"type":"web_search_call","id":"ws_1"}}"#,
+            r#"{"type":"response.output_item.done","item":{"type":"web_search_call","id":"ws_1","action":{"queries":["a"]}}}"#,
+            r#"{"type":"response.output_item.done","item":{"type":"reasoning","id":"rs_2","summary":[]}}"#,
+            MESSAGE_ADDED,
+            &text_delta("Fact "),
+            &text_delta("\u{E200}cite\u{E202}turn0view0\u{E201}"),
+            &text_delta("."),
+            citation,
+            r#"{"type":"response.output_text.done"}"#,
+            MESSAGE_DONE,
+            r#"{"type":"response.output_item.done","item":{"type":"reasoning","id":"rs_3","summary":[]}}"#,
+            ADDED_1,
+            r#"{"type":"response.output_item.done","item":{"type":"function_call","id":"fc_1","call_id":"call_1","name":"lookup","arguments":"{}"}}"#,
+        ])
+        .await;
+        let request = request_with(
+            vec![
+                ProcessedMessage::text("user", "hi"),
+                ProcessedMessage {
+                    tool_calls: Some(vec![tool_call_payload("call_1")]),
+                    reasoning_items: Some(replayed_items(&chunks)),
+                    ..ProcessedMessage::text("assistant", "Earlier round text{{tool_call:ws_0}}Fact .")
+                },
+                ProcessedMessage {
+                    tool_call_id: Some("call_1".into()),
+                    ..ProcessedMessage::text("tool", "ok")
+                },
+            ],
+            ModelCapabilities::minimal(),
+        );
+
+        let body = build_request_body(&request, true, false);
+
+        let input = body["input"].as_array().unwrap();
+        assert_eq!(input.len(), 8);
+        assert_eq!(input[1], serde_json::json!({"type":"reasoning","id":"rs_1","summary":[]}));
+        assert_eq!(input[2]["type"], "web_search_call");
+        assert_eq!(input[3], serde_json::json!({"type":"reasoning","id":"rs_2","summary":[]}));
+        assert_eq!(
+            input[4],
+            serde_json::json!({"role":"assistant","content":"Fact .\n\nSources:\n- A: https://a.example"})
+        );
+        assert_eq!(input[5], serde_json::json!({"type":"reasoning","id":"rs_3","summary":[]}));
+        assert_eq!(input[6]["type"], "function_call");
+        assert_eq!(input[6]["call_id"], "call_1");
+        assert_eq!(input[7]["type"], "function_call_output");
+        assert_eq!(input[7]["call_id"], "call_1");
+        let serialized = serde_json::to_string(input).unwrap();
+        assert!(!serialized.contains("{{tool_call:") && !serialized.contains("Earlier round text"));
+    }
+
+    #[tokio::test]
+    async fn message_of_only_a_cite_span_pushes_no_replay_item() {
+        let chunks = run(&[
+            MESSAGE_ADDED,
+            &text_delta("\u{E200}cite\u{E202}turn0view0\u{E201}"),
+            r#"{"type":"response.output_text.done"}"#,
+            MESSAGE_DONE,
+        ])
+        .await;
+
+        assert!(replayed_items(&chunks).is_empty());
+    }
+
+    #[tokio::test]
+    async fn sources_of_one_message_do_not_leak_into_the_next_replay_item() {
+        let citation = r#"{"type":"response.output_text.annotation.added","annotation":{"type":"url_citation","url":"https://a.example","title":"A"}}"#;
+        let chunks = run(&[
+            MESSAGE_ADDED,
+            &text_delta("One"),
+            citation,
+            MESSAGE_DONE,
+            MESSAGE_ADDED,
+            &text_delta("Two"),
+            citation,
+            MESSAGE_DONE,
+        ])
+        .await;
+
+        assert_eq!(
+            replayed_items(&chunks),
+            vec![
+                serde_json::json!({"role":"assistant","content":"One\n\nSources:\n- A: https://a.example"}),
+                serde_json::json!({"role":"assistant","content":"Two\n\nSources:\n- A: https://a.example"}),
             ]
         );
     }
