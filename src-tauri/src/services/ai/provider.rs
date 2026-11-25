@@ -3,6 +3,7 @@ use std::pin::Pin;
 use async_trait::async_trait;
 use futures::Stream;
 
+use crate::models::ai::Source;
 use crate::models::capabilities::ModelCapabilities;
 use crate::models::message::ProcessedMessage;
 use crate::models::settings::ModelParameters;
@@ -25,6 +26,7 @@ pub struct StreamChunk {
     pub usage: Option<TokenUsage>,
     pub tool_call_event: Option<ToolCallEvent>,
     pub reasoning_item: Option<serde_json::Value>,
+    pub source: Option<Source>,
 }
 
 impl StreamChunk {
@@ -43,6 +45,7 @@ impl StreamChunk {
             usage: None,
             tool_call_event: None,
             reasoning_item: None,
+            source: None,
         }
     }
 
@@ -56,6 +59,13 @@ impl StreamChunk {
     pub fn reasoning_item(accumulated: &str, item: serde_json::Value) -> Self {
         Self {
             reasoning_item: Some(item),
+            ..Self::content(String::new(), accumulated, None, "")
+        }
+    }
+
+    pub fn source(accumulated: &str, source: Source) -> Self {
+        Self {
+            source: Some(source),
             ..Self::content(String::new(), accumulated, None, "")
         }
     }

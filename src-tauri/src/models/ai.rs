@@ -37,6 +37,12 @@ pub struct ToolCall {
     pub completed_at: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Source {
+    pub url: String,
+    pub title: String,
+}
+
 #[derive(Clone, Serialize)]
 #[serde(tag = "event", content = "data", rename_all = "snake_case")]
 pub enum StreamEvent {
@@ -51,6 +57,7 @@ pub enum StreamEvent {
         full_thinking: Option<String>,
         prompt_tokens: Option<usize>,
         completion_tokens: Option<usize>,
+        sources: Vec<Source>,
     },
     Error {
         message: String,

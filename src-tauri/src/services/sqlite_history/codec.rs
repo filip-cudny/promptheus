@@ -131,6 +131,7 @@ mod tests {
             cancelled: false,
             tool_calls: vec![],
             text_attachments: vec![],
+            sources: vec![],
             applied_skills: vec![],
         }
     }
@@ -272,6 +273,39 @@ mod tests {
         assert_eq!(decoded.nodes.len(), 1);
         assert_eq!(decoded.root_node_id.as_deref(), Some("u"));
         assert_eq!(decoded.model_id.as_deref(), Some("gpt-4"));
+    }
+
+    #[test]
+    fn tree_json_round_trips_node_sources() {
+        use crate::models::ai::Source;
+        let sources = vec![
+            Source { url: "https://a.example/x".into(), title: "A".into() },
+            Source { url: "https://b.example".into(), title: "https://b.example".into() },
+        ];
+        let tree = TreeJson {
+            nodes: vec![SerializedConversationNode {
+                sources: sources.clone(),
+                ..assistant_node("reply")
+            }],
+            root_node_id: None,
+            current_path: vec![],
+            resolved_environment_section: None,
+            model_id: None,
+            reasoning_effort: None,
+        };
+
+        let decoded: TreeJson = serde_json::from_str(&serde_json::to_string(&tree).unwrap()).unwrap();
+
+        assert_eq!(decoded.nodes[0].sources, sources);
+    }
+
+    #[test]
+    fn node_json_without_sources_decodes_with_empty_list() {
+        let json = r#"{"node_id":"a","parent_id":null,"role":"assistant","content":"hi"}"#;
+
+        let node: SerializedConversationNode = serde_json::from_str(json).unwrap();
+
+        assert!(node.sources.is_empty());
     }
 
     #[test]

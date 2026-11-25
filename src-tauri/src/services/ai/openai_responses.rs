@@ -7,6 +7,7 @@ use futures::Stream;
 use serde::Deserialize;
 use tokio_stream::StreamExt;
 
+use crate::models::ai::Source;
 use crate::models::message::{ContentPart, MessageContent, ProcessedMessage};
 use crate::models::settings::ModelConfig;
 
@@ -184,6 +185,8 @@ struct ResponseEvent {
     name: Option<String>,
     #[serde(default)]
     arguments: Option<String>,
+    #[serde(default)]
+    annotation: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -253,9 +256,16 @@ impl AiProvider for OpenAiResponsesProvider {
     }
 }
 
+const CITATION_SPAN_OPEN: char = '\u{E200}';
+const CITATION_SPAN_CLOSE: char = '\u{E201}';
+const CITATION_FIELD_SEPARATOR: char = '\u{E202}';
+const CITE_SPAN_TYPE: &str = "cite";
+
 #[derive(Default)]
 struct StreamState {
     accumulated: String,
+    open_span: Option<String>,
+    sources: Vec<Source>,
     accumulated_thinking: String,
     active_tool_call_ids: Vec<String>,
     fn_call_args: HashMap<String, (String, String)>,
@@ -271,6 +281,54 @@ impl StreamState {
             thinking_delta,
             &self.accumulated_thinking,
         ));
+    }
+
+    fn visible_text(&mut self, delta: &str) -> String {
+        let mut visible = String::new();
+        for ch in delta.chars() {
+            match self.open_span.as_mut() {
+                None if ch == CITATION_SPAN_OPEN => self.open_span = Some(ch.to_string()),
+                None => visible.push(ch),
+                Some(span) => {
+                    span.push(ch);
+                    if ch == CITATION_SPAN_CLOSE {
+                        let span = self.open_span.take().unwrap_or_default();
+                        visible.push_str(&resolve_closed_span(span));
+                    }
+                }
+            }
+        }
+        visible
+    }
+
+    fn drop_open_span(&mut self) {
+        if let Some(span) = self.open_span.take() {
+            log::debug!(
+                "responses: open citation span dropped at text end, len={}",
+                span.chars().count()
+            );
+        }
+    }
+
+    fn add_url_citation(&mut self, annotation: &serde_json::Value) {
+        let text = |key: &str| {
+            annotation
+                .get(key)
+                .and_then(|v| v.as_str())
+                .filter(|v| !v.is_empty())
+        };
+        let Some(url) = text("url") else { return };
+        if self.sources.iter().any(|s| s.url == url) {
+            return;
+        }
+        let source = Source {
+            url: url.to_string(),
+            title: text("title").unwrap_or(url).to_string(),
+        };
+        log::debug!("responses: url_citation source added");
+        self.sources.push(source.clone());
+        self.pending_chunks
+            .push_back(StreamChunk::source(&self.accumulated, source));
     }
 
     fn push_tool_event(&mut self, event: ToolCallEvent) {
@@ -312,6 +370,22 @@ impl StreamState {
     }
 }
 
+fn resolve_closed_span(span: String) -> String {
+    let span_type: String = span
+        .trim_start_matches(CITATION_SPAN_OPEN)
+        .split([CITATION_FIELD_SEPARATOR, CITATION_SPAN_CLOSE])
+        .next()
+        .unwrap_or_default()
+        .chars()
+        .take(32)
+        .collect();
+    if span_type == CITE_SPAN_TYPE {
+        return String::new();
+    }
+    log::debug!("responses: non-cite span kept as text, type={span_type}");
+    span
+}
+
 fn parse_output_item(raw: serde_json::Value) -> Option<OutputItemEvent> {
     serde_json::from_value(raw)
         .map_err(|e| log::warn!("responses: failed to parse output item: {e}"))
@@ -332,12 +406,20 @@ fn process_event(state: &mut StreamState, event: ResponseEvent) {
             state.push_content(String::new(), Some(thinking));
         }
         "response.output_text.delta" => {
-            let delta = event.delta.unwrap_or_default();
+            let delta = state.visible_text(&event.delta.unwrap_or_default());
             if delta.is_empty() {
                 return;
             }
             state.accumulated.push_str(&delta);
             state.push_content(delta, None);
+        }
+        "response.output_text.done" => state.drop_open_span(),
+        "response.output_text.annotation.added" => {
+            let Some(annotation) = event.annotation else { return };
+            match annotation.get("type").and_then(|t| t.as_str()) {
+                Some("url_citation") => state.add_url_citation(&annotation),
+                other => log::trace!("responses: annotation ignored type={other:?}"),
+            }
         }
         "response.output_item.added" => {
             let Some(item) = event.item.and_then(parse_output_item) else {
@@ -821,6 +903,84 @@ mod tests {
         let body = build_request_body(&request, true, false);
 
         assert!(body.get("include").is_none());
+    }
+
+    fn text_delta(text: &str) -> String {
+        serde_json::json!({"type": "response.output_text.delta", "delta": text}).to_string()
+    }
+
+    fn is_marker_char(c: char) -> bool {
+        ('\u{E200}'..='\u{E202}').contains(&c)
+    }
+
+    #[tokio::test]
+    async fn cite_span_split_across_deltas_never_reaches_a_chunk() {
+        let deltas = [
+            text_delta("ol. \u{E200}ci"),
+            text_delta("te\u{E202}turn777310view1\u{E202}turn7773"),
+            text_delta("10view0\u{E202}turn777310view2\u{E201}\n\nPrzetestuję"),
+        ];
+        let events: Vec<&str> = deltas.iter().map(String::as_str).collect();
+
+        let chunks = run(&events).await;
+
+        assert!(chunks
+            .iter()
+            .all(|c| !c.delta.chars().any(is_marker_char) && !c.accumulated.chars().any(is_marker_char)));
+        assert_eq!(chunks.last().unwrap().accumulated, "ol. \n\nPrzetestuję");
+    }
+
+    #[tokio::test]
+    async fn cite_span_whole_in_one_delta_is_dropped() {
+        let chunks = run(&[&text_delta("A \u{E200}cite\u{E202}turn1view0\u{E201}B")]).await;
+
+        assert_eq!(chunks.last().unwrap().accumulated, "A B");
+    }
+
+    #[tokio::test]
+    async fn span_open_at_text_done_is_dropped_before_the_next_item() {
+        let chunks = run(&[
+            &text_delta("A "),
+            &text_delta("\u{E200}cite\u{E202}turn1view0"),
+            r#"{"type":"response.output_text.done"}"#,
+            ADDED_1,
+        ])
+        .await;
+
+        let accumulated: Vec<&str> = chunks.iter().map(|c| c.accumulated.as_str()).collect();
+        assert_eq!(accumulated, vec!["A ", "A {{tool_call:call_1}}"]);
+    }
+
+    #[tokio::test]
+    async fn non_cite_span_is_kept_verbatim() {
+        let input = "x \u{E200}other\u{E202}y\u{E201} z";
+
+        let chunks = run(&[&text_delta(input)]).await;
+
+        assert_eq!(chunks.last().unwrap().accumulated, input);
+    }
+
+    #[tokio::test]
+    async fn url_citation_annotations_become_deduplicated_source_chunks() {
+        let annotation = |body: &str| {
+            format!(
+                r#"{{"type":"response.output_text.annotation.added","item_id":"msg_1","output_index":1,"content_index":0,"annotation_index":0,"annotation":{body}}}"#
+            )
+        };
+        let a = annotation(r#"{"type":"url_citation","url":"https://a.example/x","title":"A","start_index":0,"end_index":5}"#);
+        let b = annotation(r#"{"type":"url_citation","url":"https://b.example","start_index":0,"end_index":5}"#);
+        let file = annotation(r#"{"type":"file_citation","file_id":"file_1","filename":"f.txt","index":0}"#);
+
+        let chunks = run(&[&a, &file, &a, &b]).await;
+
+        let sources: Vec<Source> = chunks.into_iter().filter_map(|c| c.source).collect();
+        assert_eq!(
+            sources,
+            vec![
+                Source { url: "https://a.example/x".into(), title: "A".into() },
+                Source { url: "https://b.example".into(), title: "https://b.example".into() },
+            ]
+        );
     }
 
     #[tokio::test]

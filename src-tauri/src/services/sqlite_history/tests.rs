@@ -79,6 +79,7 @@ fn make_nodes(user_text: &str, assistant_text: &str) -> Vec<SerializedConversati
             cancelled: false,
             tool_calls: vec![],
             text_attachments: vec![],
+            sources: vec![],
             applied_skills: vec![],
         },
         SerializedConversationNode {
@@ -98,6 +99,7 @@ fn make_nodes(user_text: &str, assistant_text: &str) -> Vec<SerializedConversati
             cancelled: false,
             tool_calls: vec![],
             text_attachments: vec![],
+            sources: vec![],
             applied_skills: vec![],
         },
     ]

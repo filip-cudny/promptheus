@@ -168,6 +168,7 @@ async fn run_configured(
             error: None,
             prompt_tokens: None,
             completion_tokens: None,
+            sources: Vec::new(),
         },
         channel: None,
     }));

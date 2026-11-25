@@ -6,7 +6,7 @@ use tokio::sync::watch;
 use tokio::sync::Mutex as TokioMutex;
 use uuid::Uuid;
 
-use crate::models::ai::{StreamEvent, ToolCall, ToolCallStatus};
+use crate::models::ai::{Source, StreamEvent, ToolCall, ToolCallStatus};
 use crate::services::config::ConfigService;
 
 #[derive(Debug, thiserror::Error)]
@@ -30,6 +30,7 @@ pub struct ExecutionSnapshot {
     pub error: Option<String>,
     pub prompt_tokens: Option<usize>,
     pub completion_tokens: Option<usize>,
+    pub sources: Vec<Source>,
 }
 
 pub struct LiveExecution {
@@ -67,7 +68,14 @@ impl LiveExecution {
             full_thinking,
             prompt_tokens,
             completion_tokens,
+            sources: self.snapshot.sources.clone(),
         });
+    }
+
+    pub fn add_source(&mut self, source: Source) {
+        if !self.snapshot.sources.iter().any(|s| s.url == source.url) {
+            self.snapshot.sources.push(source);
+        }
     }
 
     pub fn finish_tool_call(
@@ -185,6 +193,7 @@ impl PromptExecutionService {
                 error: None,
                 prompt_tokens: None,
                 completion_tokens: None,
+                sources: Vec::new(),
             },
             channel: Some(channel),
         }));

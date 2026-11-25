@@ -71,6 +71,11 @@ pub async fn run_stream_loop(
                     completion_tokens = Some(usage.completion_tokens);
                 }
 
+                if let Some(source) = chunk.source {
+                    live.lock().await.add_source(source);
+                    continue;
+                }
+
                 if let Some(item) = chunk.reasoning_item {
                     reasoning_items.push(item);
                     continue;
@@ -293,6 +298,7 @@ pub fn build_tool_loop_messages(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::ai::Source;
     use crate::models::capabilities::ModelCapabilities;
     use crate::services::ai::provider::{AiProvider, CompletionRequest};
     use crate::services::execution::lifecycle::{ExecutionSnapshot, LiveExecution};
@@ -340,6 +346,7 @@ mod tests {
                 error: None,
                 prompt_tokens: None,
                 completion_tokens: None,
+                sources: Vec::new(),
             },
             channel: None,
         }))
@@ -354,6 +361,7 @@ mod tests {
             usage: None,
             tool_call_event: None,
             reasoning_item: None,
+            source: None,
         }
     }
 
@@ -494,6 +502,50 @@ mod tests {
 
         assert_eq!(result.reasoning_items, vec![reasoning_item()]);
         assert_eq!(event_names(&events), ["done"]);
+    }
+
+    fn source(url: &str) -> Source {
+        Source {
+            url: url.to_string(),
+            title: url.to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn sources_of_all_iterations_reach_done_once_each_in_order() {
+        let (live, events) = recording_live();
+        let first = stream_of(vec![
+            Ok(StreamChunk::source("", source("a"))),
+            Ok(StreamChunk::source("", source("b"))),
+            Ok(tool_event_chunk(ToolCallEvent::ArgumentsComplete {
+                tool_call_id: "tc-1".to_string(),
+                tool_name: "srv.tool".to_string(),
+                arguments: serde_json::json!({}),
+            })),
+        ]);
+        let second = stream_of(vec![
+            Ok(StreamChunk::source("", source("b"))),
+            Ok(StreamChunk::source("", source("c"))),
+            Ok(text_chunk("Hi", "Hi")),
+        ]);
+
+        run_stream_loop(first, Arc::clone(&live), None, "").await.unwrap();
+        run_stream_loop(second, Arc::clone(&live), None, "").await.unwrap();
+
+        let expected = vec![source("a"), source("b"), source("c")];
+        assert_eq!(live.lock().await.snapshot.sources, expected);
+        let events = events.lock().unwrap();
+        let done = events.last().unwrap();
+        assert_eq!(done["event"], "done");
+        assert_eq!(
+            done["data"]["sources"],
+            serde_json::json!([
+                {"url": "a", "title": "a"},
+                {"url": "b", "title": "b"},
+                {"url": "c", "title": "c"},
+            ])
+        );
+        assert_eq!(events.iter().filter(|e| e["event"] != "done").count(), 1);
     }
 
     #[test]

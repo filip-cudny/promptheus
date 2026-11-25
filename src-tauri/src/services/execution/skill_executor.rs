@@ -328,6 +328,7 @@ impl SkillExecutor {
             cancelled: false,
             tool_calls: vec![],
             text_attachments: vec![],
+            sources: vec![],
             applied_skills: vec![AppliedSkill {
                 name: skill_name.to_string(),
                 skill_version_id,
@@ -352,6 +353,7 @@ impl SkillExecutor {
             cancelled: false,
             tool_calls: vec![],
             text_attachments: vec![],
+            sources: vec![],
             applied_skills: vec![],
         };
 

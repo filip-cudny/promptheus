@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::models::ai::ToolCall;
+use crate::models::ai::{Source, ToolCall};
 use crate::models::message::{AppliedSkill, ImageData, NodeUpdate};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -80,6 +80,8 @@ pub struct SerializedConversationNode {
     pub tool_calls: Vec<ToolCall>,
     #[serde(default)]
     pub text_attachments: Vec<String>,
+    #[serde(default)]
+    pub sources: Vec<Source>,
     #[serde(default)]
     pub applied_skills: Vec<AppliedSkill>,
 }
@@ -246,6 +248,7 @@ mod tests {
                         cancelled: false,
                         tool_calls: vec![],
                         text_attachments: vec![],
+                        sources: vec![],
                         applied_skills: vec![],
                     },
                     SerializedConversationNode {
@@ -265,6 +268,7 @@ mod tests {
                         cancelled: false,
                         tool_calls: vec![],
                         text_attachments: vec![],
+                        sources: vec![],
                         applied_skills: vec![],
                     },
                 ],
