@@ -54,6 +54,7 @@ export interface ProposalRowData {
   env_value: { name: string; secret: boolean; set: boolean } | null;
   waits_for: string[];
   new_destination: string | null;
+  model_names: { before: string | null; after: string | null } | null;
 }
 
 export interface ProposalData {

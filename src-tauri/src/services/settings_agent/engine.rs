@@ -9,6 +9,7 @@ use tokio::sync::{watch, Mutex as TokioMutex};
 use crate::models::message::ProcessedMessage;
 use crate::models::settings::{ApiMode, Provider, Settings};
 use crate::services::ai::AiService;
+use crate::services::change_log::Target;
 use crate::services::config::catalog;
 use crate::services::execution::lifecycle::LiveExecution;
 use crate::services::execution::stream::{build_tool_loop_messages, run_stream_loop};
@@ -23,7 +24,7 @@ use crate::Error;
 use super::dispatch::{Context, Dispatcher, Proposal, ProposalSink, SecretViewSink};
 use super::mcp::{select_enabled, McpSource};
 use super::operations::Operation;
-use super::plan::{plan, stale_rows, Current, RowError};
+use super::plan::{plan, stale_rows, Current, PlannedRow, RowError};
 use super::tools;
 use super::transcript::{self, End, Iteration, ToolCallRecord, Transcript};
 
@@ -133,10 +134,38 @@ pub fn proposal_payload(proposal: &Proposal, current: &Current) -> Value {
                 "sample_input": sample_input(proposal.operations.get(planned.row)),
                 "stale": stale.contains(&planned.row),
                 "env_value": env_value_of(proposal, planned.row, current),
+                "model_names": model_names_of(proposal, planned, current),
             })
         })
         .collect();
     json!({"proposal_id": proposal.id, "rows": rows})
+}
+
+fn model_names_of(proposal: &Proposal, planned: &PlannedRow, current: &Current) -> Value {
+    let Some(Operation::SetSetting { key, value }) = proposal.operations.get(planned.row) else {
+        return Value::Null;
+    };
+    let catalog_key = catalog::catalog_path(key);
+    let is_model_reference = catalog::ENTRIES
+        .iter()
+        .any(|entry| entry.key == catalog_key && matches!(entry.kind, catalog::Kind::Model { .. }));
+    if !is_model_reference {
+        return Value::Null;
+    }
+    let before = planned.operation.effects.iter().find_map(|effect| match &effect.target {
+        Target::Setting { path } if path == key => effect.before.as_ref().and_then(Value::as_str),
+        _ => None,
+    });
+    let display_name = |id: &str| {
+        [&proposal.plan.settings, current.settings]
+            .iter()
+            .find_map(|settings| settings.models.iter().find(|model| model.id == id))
+            .map(|model| model.display_name.as_str())
+    };
+    json!({
+        "before": before.and_then(display_name),
+        "after": value.as_str().and_then(display_name),
+    })
 }
 
 fn env_value_of(proposal: &Proposal, row: usize, current: &Current) -> Value {

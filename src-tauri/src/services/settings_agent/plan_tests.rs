@@ -110,13 +110,13 @@ fn setting_effect<'a>(plan: &'a Plan, path: &str) -> &'a Effect {
 fn dependent_row_plans_when_selected_and_names_the_unchecked_row() {
     let (settings, dir) = (fixture_settings(), config_dir());
     let ops = vec![
-        Operation::AddModel { model: model("x", ModelType::Text, "${X_KEY}") },
-        set_setting("surfaces.chat.generation.model_id", json!("x")),
+        Operation::AddModel { model: model("123e4567-e89b-12d3-a456-426614174000", ModelType::Text, "${X_KEY}") },
+        set_setting("surfaces.chat.generation.model_id", json!("123e4567-e89b-12d3-a456-426614174000")),
     ];
     let current = Current { settings: &settings, config_dir: dir.path() };
 
     let planned = plan(&ops, &[true, true], &current).expect("both selected");
-    assert_eq!(planned.settings.surfaces.chat.generation.model_id.as_deref(), Some("x"));
+    assert_eq!(planned.settings.surfaces.chat.generation.model_id.as_deref(), Some("123e4567-e89b-12d3-a456-426614174000"));
     assert_eq!(planned.rows.len(), 2);
 
     let errors = plan(&ops, &[false, true], &current).unwrap_err();
@@ -157,9 +157,9 @@ fn settings_agent_tools_cannot_be_set_by_the_agent() {
 fn row_needing_two_unchecked_rows_names_both() {
     let (settings, dir) = (fixture_settings(), config_dir());
     let ops = vec![
-        Operation::AddModel { model: model("x", ModelType::Text, "${X_KEY}") },
-        Operation::UpdateModel { id: "x".into(), model: model("x", ModelType::Stt, "${X_KEY}") },
-        set_setting("surfaces.speech_to_text.model_id", json!("x")),
+        Operation::AddModel { model: model("123e4567-e89b-12d3-a456-426614174000", ModelType::Text, "${X_KEY}") },
+        Operation::UpdateModel { id: "123e4567-e89b-12d3-a456-426614174000".into(), model: model("123e4567-e89b-12d3-a456-426614174000", ModelType::Stt, "${X_KEY}") },
+        set_setting("surfaces.speech_to_text.model_id", json!("123e4567-e89b-12d3-a456-426614174000")),
     ];
     let current = Current { settings: &settings, config_dir: dir.path() };
 
@@ -173,14 +173,29 @@ fn row_needing_two_unchecked_rows_names_both() {
 fn literal_api_key_is_a_row_error_and_env_reference_passes() {
     let (settings, dir) = (fixture_settings(), config_dir());
 
-    let literal = vec![Operation::AddModel { model: model("x", ModelType::Text, "sk-secret") }];
+    let literal = vec![Operation::AddModel { model: model("123e4567-e89b-12d3-a456-426614174000", ModelType::Text, "sk-secret") }];
     let errors = plan_all(&literal, &settings, &dir).unwrap_err();
     assert_eq!(errors[0].row, 0);
-    assert_eq!(errors[0].key.as_deref(), Some("models[x].api_key"));
+    assert_eq!(errors[0].key.as_deref(), Some("models[123e4567-e89b-12d3-a456-426614174000].api_key"));
     assert_eq!(errors[0].message, "secrets only through the secret element");
 
-    let reference = vec![Operation::AddModel { model: model("x", ModelType::Text, "${OPENAI_KEY}") }];
+    let reference = vec![Operation::AddModel { model: model("123e4567-e89b-12d3-a456-426614174000", ModelType::Text, "${OPENAI_KEY}") }];
     plan_all(&reference, &settings, &dir).expect("reference passes");
+}
+
+#[test]
+fn add_model_refuses_an_id_that_is_not_a_uuid() {
+    let (settings, dir) = (fixture_settings(), config_dir());
+
+    let slug = vec![Operation::AddModel { model: model("gpt-6-2-sol", ModelType::Text, "${X_KEY}") }];
+    let errors = plan_all(&slug, &settings, &dir).unwrap_err();
+    assert_eq!(errors[0].row, 0);
+    assert!(errors[0].message.contains("UUID"), "{}", errors[0].message);
+
+    let uuid = vec![Operation::AddModel {
+        model: model("123e4567-e89b-12d3-a456-426614174000", ModelType::Text, "${X_KEY}"),
+    }];
+    plan_all(&uuid, &settings, &dir).expect("a UUID id passes");
 }
 
 #[test]
@@ -324,7 +339,7 @@ fn every_operation_type_plans_on_the_fixture() {
     let (settings, dir) = (fixture_settings(), config_dir());
     let operations = vec![
         set_setting("theme", json!("light")),
-        Operation::AddModel { model: model("new", ModelType::Text, "${NEW_KEY}") },
+        Operation::AddModel { model: model("123e4567-e89b-12d3-a456-426614174001", ModelType::Text, "${NEW_KEY}") },
         Operation::UpdateModel {
             id: "def".into(),
             model: ModelConfig { display_name: "Renamed".into(), ..model("def", ModelType::Text, "") },

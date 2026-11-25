@@ -411,6 +411,12 @@ fn apply(state: &mut State, current: &Current, op: &Operation) -> Result<Vec<Eff
     match op {
         Operation::SetSetting { key, value } => set_setting(state, current, key, value.clone())?,
         Operation::AddModel { model } => {
+            if uuid::Uuid::parse_str(&model.id).is_err() {
+                return Err(Fail::at(
+                    format!("models[{}].id", model.id),
+                    "model id must be a new UUID, e.g. 123e4567-e89b-12d3-a456-426614174000",
+                ));
+            }
             check_api_key(&model.id, model.api_key.as_deref())?;
             state.config.add_model(model.clone());
         }

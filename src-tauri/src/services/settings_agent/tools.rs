@@ -128,7 +128,7 @@ fn operation_branches() -> Vec<Value> {
         ),
         branch(
             "add_model",
-            "Adds a new model with a unique `model.id`. Put an API key only as a `${VAR}` reference.",
+            "Adds a new model whose `model.id` is a new UUID (e.g. `123e4567-e89b-12d3-a456-426614174000`). Put an API key only as a `${VAR}` reference.",
             vec![("model", model_schema())],
             &["model"],
         ),

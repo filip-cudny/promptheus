@@ -251,7 +251,7 @@ fn a_model_field_plan_applies_to_that_model_only() {
 fn every_operation() -> Vec<Operation> {
     vec![
         set_setting("theme", json!("light")),
-        Operation::AddModel { model: model("new", ModelType::Text, "${NEW_KEY}") },
+        Operation::AddModel { model: model("123e4567-e89b-12d3-a456-426614174001", ModelType::Text, "${NEW_KEY}") },
         Operation::UpdateModel {
             id: "def".into(),
             model: ModelConfig { display_name: "Renamed".into(), ..model("def", ModelType::Text, "") },
@@ -341,7 +341,7 @@ fn a_whole_card_of_every_operation_type_round_trips() {
     let (dir, mut config) = setup();
     let start = tree(dir.path());
     let ops = vec![
-        Operation::AddModel { model: model("new", ModelType::Text, "${NEW_KEY}") },
+        Operation::AddModel { model: model("123e4567-e89b-12d3-a456-426614174001", ModelType::Text, "${NEW_KEY}") },
         set_setting("theme", json!("light")),
         Operation::DeleteSkill { slug: "old-skill".into() },
         Operation::DeleteMcpServer { name: "tools".into() },
@@ -361,16 +361,16 @@ fn an_added_model_set_as_chat_default_resolves_in_the_ai_service() {
     set_override("PHX_APPLY_TEST_KEY", Some("sk-apply-test-1".into()));
     let (dir, mut config) = setup();
     let ops = vec![
-        Operation::AddModel { model: model("x", ModelType::Text, "${PHX_APPLY_TEST_KEY}") },
-        set_setting("surfaces.chat.generation.model_id", json!("x")),
+        Operation::AddModel { model: model("123e4567-e89b-12d3-a456-426614174000", ModelType::Text, "${PHX_APPLY_TEST_KEY}") },
+        set_setting("surfaces.chat.generation.model_id", json!("123e4567-e89b-12d3-a456-426614174000")),
     ];
     let planned = make_plan(&ops, &config, dir.path());
 
     run_apply(&planned, &mut config, dir.path()).unwrap();
 
     let settings = config.settings();
-    assert!(AiService::new(&settings.models).has_model("x"));
-    assert_eq!(settings.surfaces.chat.generation.model_id.as_deref(), Some("x"));
+    assert!(AiService::new(&settings.models).has_model("123e4567-e89b-12d3-a456-426614174000"));
+    assert_eq!(settings.surfaces.chat.generation.model_id.as_deref(), Some("123e4567-e89b-12d3-a456-426614174000"));
 }
 
 #[test]
@@ -543,7 +543,7 @@ fn card_operations(name: &str) -> Vec<Operation> {
     vec![
         Operation::AddEnvVar { name: name.into(), description: "d".into(), secret: true },
         Operation::SetEnvValue { name: name.into() },
-        Operation::AddModel { model: model("card-model", ModelType::Text, &format!("${{{name}}}")) },
+        Operation::AddModel { model: model("123e4567-e89b-12d3-a456-426614174002", ModelType::Text, &format!("${{{name}}}")) },
     ]
 }
 
@@ -564,7 +564,7 @@ fn a_card_with_a_secret_row_writes_the_typed_value_with_the_settings() {
 
     assert_eq!(env_text(dir.path()), "PHX_CARD_NEW=\"sk-new-444\"\n");
     assert_eq!(current_value(dir.path(), "PHX_CARD_NEW").as_deref(), Some("sk-new-444"));
-    assert!(config.settings().models.iter().any(|m| m.id == "card-model"));
+    assert!(config.settings().models.iter().any(|m| m.id == "123e4567-e89b-12d3-a456-426614174002"));
     let entries = load_all(&change_log_dir(dir.path()));
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].kind, EntryKind::Card);
@@ -681,7 +681,7 @@ fn undo_after_the_value_changed_elsewhere_conflicts_without_a_value_and_force_re
     undone_id(run_undo(&card_id, true, &mut config, dir.path()));
 
     assert_eq!(current_value(dir.path(), "PHX_CARD_DRIFT"), None);
-    assert!(config.settings().models.iter().all(|m| m.id != "card-model"));
+    assert!(config.settings().models.iter().all(|m| m.id != "123e4567-e89b-12d3-a456-426614174002"));
 }
 
 #[test]

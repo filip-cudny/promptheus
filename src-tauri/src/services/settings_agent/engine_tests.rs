@@ -94,7 +94,7 @@ fn call(id: &str, tool: &str, arguments: Value) -> MockReply {
 
 fn scripted_turns() -> Vec<MockReply> {
     let operations = json!([
-        {"op": "add_model", "model": model("new-model", "New", "${NEW_KEY}")},
+        {"op": "add_model", "model": model("123e4567-e89b-12d3-a456-426614174007", "New", "${NEW_KEY}")},
         {"op": "update_model", "id": "literal-model", "model": model("literal-model", "Literal renamed", "")},
     ]);
     vec![
@@ -215,7 +215,7 @@ fn every_secret_path_turn() -> Vec<MockReply> {
     let card_rows = json!([
         {"op": "add_env_var", "name": "NEW_KEY", "description": "new key", "secret": true},
         {"op": "set_env_value", "name": "NEW_KEY"},
-        {"op": "add_model", "model": model("new-model", "New", "${NEW_KEY}")},
+        {"op": "add_model", "model": model("123e4567-e89b-12d3-a456-426614174007", "New", "${NEW_KEY}")},
     ]);
     vec![
         call("c1", "settings_read", json!({"what": "values"})),
@@ -285,11 +285,11 @@ async fn no_secret_reaches_any_provider_request() {
     let dir = run.dir.path();
     let handed_keys = Mutex::new(Vec::new());
     let factory = |handed: &Settings| {
-        let key = handed.models.iter().find(|m| m.id == "new-model").and_then(ModelConfig::resolved_api_key);
+        let key = handed.models.iter().find(|m| m.id == "123e4567-e89b-12d3-a456-426614174007").and_then(ModelConfig::resolved_api_key);
         handed_keys.lock().unwrap().push(key);
         let message = format!("Incorrect API key provided: {STAGED_VALUE}");
         let (provider, _) = MockProvider::new(vec![MockReply::Error(AiError::ApiStatus { status: 401, message })]);
-        AiService::with_provider("new-model", Box::new(provider))
+        AiService::with_provider("123e4567-e89b-12d3-a456-426614174007", Box::new(provider))
     };
     let values = BTreeMap::from([("NEW_KEY".to_string(), STAGED_VALUE.to_string())]);
     let placeholders = PlaceholderContext::with_apps("app", "apps");
@@ -468,6 +468,28 @@ fn a_set_env_value_row_carries_its_flags_and_never_a_value() {
     assert!(rows[2]["env_value"].is_null());
     assert_eq!(rows[0]["effects"][0]["target"], json!({"type": "secret", "name": "PHX_ENGINE_SET_VAR"}));
     assert!(!payload.to_string().contains("sk-engine-555"));
+}
+
+#[test]
+fn a_model_reference_row_carries_the_display_names_and_other_rows_null() {
+    const NEW_ID: &str = "123e4567-e89b-12d3-a456-426614174007";
+    let dir = TempDir::new().unwrap();
+    let settings = fixture_settings(Some("env-model"));
+    let operations = vec![
+        Operation::AddModel { model: model(NEW_ID, "New", "${NEW_KEY}") },
+        Operation::SetSetting { key: "surfaces.chat.generation.model_id".into(), value: json!(NEW_ID) },
+        Operation::SetSetting { key: "theme".into(), value: json!("light") },
+    ];
+    let current = Current { settings: &settings, config_dir: dir.path() };
+    let planned = plan(&operations, &[true, true, true], &current).unwrap();
+    let proposal = Proposal { id: "p".into(), operations, plan: planned, tests: Default::default(), waits: Default::default(), new_destinations: Default::default() };
+
+    let payload = proposal_payload(&proposal, &current);
+
+    let rows = &payload["rows"];
+    assert!(rows[0]["model_names"].is_null());
+    assert_eq!(rows[1]["model_names"], json!({"before": "Env", "after": "New"}));
+    assert!(rows[2]["model_names"].is_null());
 }
 
 #[tokio::test]

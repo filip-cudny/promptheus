@@ -114,9 +114,13 @@
 </span>{/each}</pre>
       {:else if effect.target.type === "setting"}
         <div class="values">
-          <span class="before">{format(effect.before)}</span>
+          <span class="before" title={row.model_names ? format(effect.before) : undefined}>
+            {row.model_names?.before ?? format(effect.before)}
+          </span>
           <span class="arrow">→</span>
-          <span class="after">{format(effect.after)}</span>
+          <span class="after" title={row.model_names ? format(effect.after) : undefined}>
+            {row.model_names?.after ?? format(effect.after)}
+          </span>
         </div>
       {/if}
     </div>

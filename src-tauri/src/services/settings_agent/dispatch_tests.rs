@@ -454,8 +454,8 @@ async fn a_row_using_an_unvalued_staged_variable_waits_and_is_not_tested() {
     let operations = json!([
         {"op": "add_env_var", "name": NAME, "description": "new key", "secret": true},
         {"op": "set_env_value", "name": NAME},
-        add_model_row("staged-model", BASE_URL_A, &format!("${{{NAME}}}")),
-        json!({"op": "add_model", "model": model("default-model", &format!("${{{NAME}}}"))}),
+        add_model_row("123e4567-e89b-12d3-a456-426614174003", BASE_URL_A, &format!("${{{NAME}}}")),
+        json!({"op": "add_model", "model": model("123e4567-e89b-12d3-a456-426614174004", &format!("${{{NAME}}}"))}),
     ]);
 
     let (text, is_error) =
@@ -486,7 +486,7 @@ async fn a_row_using_an_unvalued_staged_variable_waits_and_is_not_tested() {
 #[tokio::test]
 async fn a_key_going_to_a_new_base_url_is_not_tested_automatically() {
     let (dir, dispatcher, sink, factory_calls) = fixture_counting_factory();
-    let operations = json!({"operations": [add_model_row("moved-model", BASE_URL_B, "${OPENAI_KEY}")]});
+    let operations = json!({"operations": [add_model_row("123e4567-e89b-12d3-a456-426614174005", BASE_URL_B, "${OPENAI_KEY}")]});
 
     let (text, is_error) = call(&dispatcher, "settings_test", operations.clone()).await;
 
@@ -509,7 +509,7 @@ async fn a_key_going_to_a_new_base_url_is_not_tested_automatically() {
 #[tokio::test]
 async fn a_key_going_to_its_known_base_url_is_tested() {
     let (_dir, dispatcher, _, factory_calls) = fixture_counting_factory();
-    let operations = json!({"operations": [add_model_row("same-url-model", BASE_URL_A, "${OPENAI_KEY}")]});
+    let operations = json!({"operations": [add_model_row("123e4567-e89b-12d3-a456-426614174006", BASE_URL_A, "${OPENAI_KEY}")]});
 
     let (text, is_error) = call(&dispatcher, "settings_test", operations).await;
 
