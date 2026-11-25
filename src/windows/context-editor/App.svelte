@@ -10,16 +10,22 @@
   let images = $state<ConversationImage[]>([]);
   let editMode = $state(true);
 
-  onMount(async () => {
+  async function reload() {
     const loaded = await ctx.load();
     text = loaded.text;
     images = loaded.images;
-  });
+  }
+
+  async function save() {
+    if (await ctx.save(text, images)) await reload();
+  }
+
+  onMount(reload);
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      if (!ctx.saving) ctx.save(text, images);
+      if (!ctx.saving) save();
     }
   }
 </script>
@@ -33,7 +39,7 @@
     bind:editMode
     saving={ctx.saving}
     errorMessage={ctx.errorMessage}
-    onSave={() => ctx.save(text, images)}
+    onSave={save}
   />
 </div>
 
