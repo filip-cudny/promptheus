@@ -171,6 +171,7 @@ async fn local_change_is_committed_and_pushed() {
     let a = f.a();
     write(&a.join("tauri-app/settings.json"), &multiline_settings("changed"));
     write(&a.join("tauri-app/prompts/scratch.tmp"), "tmp\n");
+    write(&a.join("tauri-app/prompts/new.md"), "new\n");
     write(&a.join("tauri-app/extra.txt"), "staged elsewhere\n");
     f.git(&a, &["add", "tauri-app/extra.txt"]);
 
@@ -184,7 +185,7 @@ async fn local_change_is_committed_and_pushed() {
         "chore(sync): update from testhost"
     );
     let committed = f.git(&f.origin(), &["show", "--name-only", "--format=", "main"]);
-    assert_eq!(committed, "tauri-app/settings.json");
+    assert_eq!(committed, "tauri-app/prompts/new.md\ntauri-app/settings.json");
     assert!(f
         .git(&a, &["status", "--porcelain"])
         .contains("A  tauri-app/extra.txt"));

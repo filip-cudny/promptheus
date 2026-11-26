@@ -344,10 +344,7 @@ impl SettingsSync {
             })?;
         }
 
-        let mut add = vec![OsString::from("add"), "-A".into(), "--".into()];
-        add.extend(repo.stage_paths.iter().map(OsString::from));
-        add.push(":(exclude)*.tmp".into());
-        runner.run_ok(top, &add).await?;
+        runner.run_ok(top, &add_args(&repo.stage_paths)).await?;
 
         let mut diff = vec![OsString::from("diff"), "--cached".into(), "--quiet".into(), "--".into()];
         diff.extend(repo.stage_paths.iter().map(OsString::from));
@@ -425,6 +422,16 @@ impl SettingsSync {
             .await
             .clone()
     }
+}
+
+/// `git add -A` of `paths` without `*.tmp` files. The exclude goes first: when git matches
+/// untracked files it cuts the common leading directory of the positive pathspecs off every
+/// pathspec, the exclude included, and a mangled exclude can match and drop every untracked
+/// file. With the exclude first that common prefix is empty.
+fn add_args(paths: &[PathBuf]) -> Vec<OsString> {
+    let mut args = vec![OsString::from("add"), "-A".into(), "--".into(), ":(exclude)*.tmp".into()];
+    args.extend(paths.iter().map(OsString::from));
+    args
 }
 
 async fn rebase_in_progress(runner: &GitRunner, top: &Path) -> bool {

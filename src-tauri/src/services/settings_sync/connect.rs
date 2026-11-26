@@ -8,7 +8,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use super::git::{GitError, GitRunner};
-use super::{RunningGuard, SettingsSync, SyncHooks};
+use super::{add_args, RunningGuard, SettingsSync, SyncHooks};
 use crate::services::change_log::CHANGE_LOG_DIR_NAME;
 
 pub const NETWORK_TIMEOUT: Duration = Duration::from_secs(300);
@@ -473,7 +473,8 @@ impl SettingsSync {
         let top = request.repo_path.as_path();
         let runner = self.runner(self.timeout).await;
         let relative = Path::new(&request.folder);
-        let mut dirs: Vec<PathBuf> = [
+        let mut staged: Vec<PathBuf> = [
+            (SETTINGS, request.entries.settings),
             (PROMPTS, request.entries.prompts),
             (SKILLS, request.entries.skills),
         ]
@@ -482,28 +483,9 @@ impl SettingsSync {
         .map(|(entry, _)| relative.join(entry))
         .collect();
         if request.entries.settings && top.join(relative).join(CHANGE_LOG_DIR_NAME).is_dir() {
-            dirs.push(relative.join(CHANGE_LOG_DIR_NAME));
+            staged.push(relative.join(CHANGE_LOG_DIR_NAME));
         }
-
-        let mut staged = dirs.clone();
-        if request.entries.settings {
-            let settings = relative.join(SETTINGS);
-            runner
-                .run_ok(top, &[OsString::from("add"), "-A".into(), "--".into(), settings.clone().into()])
-                .await
-                .map_err(git_message)?;
-            staged.push(settings);
-        }
-        for dir in &dirs {
-            let add = [
-                OsString::from("add"),
-                "-A".into(),
-                "--".into(),
-                dir.join("").into_os_string(),
-                ":(exclude)*.tmp".into(),
-            ];
-            runner.run_ok(top, &add).await.map_err(git_message)?;
-        }
+        runner.run_ok(top, &add_args(&staged)).await.map_err(git_message)?;
         log::info!("settings sync: staged {} paths in {}", staged.len(), top.display());
         Ok(staged)
     }
