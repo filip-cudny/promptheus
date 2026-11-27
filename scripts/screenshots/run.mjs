@@ -88,6 +88,7 @@ async function startServer(catalog, envDir) {
     cacheDir: join(root, "node_modules", ".vite-screenshots"),
     plugins: [svelte(), mocksPlugin(catalog)],
     resolve: { alias: { $lib: join(root, "src", "lib") } },
+    optimizeDeps: { entries: ["**/*.html", "scripts/screenshots/mocks.ts"] },
     server: { host: "127.0.0.1", port: 0 },
     logLevel: "error",
   });
